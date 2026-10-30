@@ -1,0 +1,17 @@
+FILM BAZ - BUILD STATUS
+
+This archive contains the complete project source and package-lock.json.
+
+Build verification status: NOT COMPLETED in the current environment.
+
+Reason: npm ci was attempted twice (including --prefer-offline), but dependency installation timed out. Vite and other required executables were therefore unavailable, so no successful production build or runtime test can honestly be reported.
+
+To build on a computer with Node.js 20+ and working npm registry access:
+  npm ci
+  npm run build
+
+To run the Electron Windows installer build on Windows:
+  npm ci
+  npm run electron:build
+
+Do not treat this archive as a tested installer. It is the complete source project.

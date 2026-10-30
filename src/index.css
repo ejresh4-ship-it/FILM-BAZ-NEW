@@ -1,0 +1,135 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+    --bg-base: #070a12;
+    --bg-surface: #0d1320;
+    --bg-surface-2: #141c2e;
+    --bg-elevated: #1a2338;
+    --border-subtle: rgba(212, 175, 55, 0.14);
+    --border-default: rgba(255, 255, 255, 0.08);
+    --text-primary: #f4f1ea;
+    --text-secondary: #b3bccd;
+    --text-muted: #6b7689;
+    --accent-gold: #d4af37;
+    --accent-gold-bright: #f0c75e;
+    --accent-orange: #e8853a;
+    --accent-orange-deep: #c96a26;
+  }
+
+  :root[data-theme='gold'] {
+    --bg-base: #100d08;
+    --bg-surface: #1b160d;
+    --bg-surface-2: #282012;
+    --bg-elevated: #392b16;
+    --border-subtle: rgba(232, 178, 65, 0.24);
+    --border-default: rgba(245, 211, 142, 0.12);
+    --text-primary: #fff6e4;
+    --text-secondary: #d5c3a0;
+    --text-muted: #9b8967;
+    --accent-gold: #e8b241;
+    --accent-gold-bright: #ffd77a;
+    --accent-orange: #e58a3a;
+    --accent-orange-deep: #c96a26;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--bg-base);
+    color: var(--text-primary);
+    font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    line-height: 1.6;
+  }
+
+  ::selection {
+    background: rgba(212, 175, 55, 0.3);
+    color: #fff;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-l from-[#e8853a] to-[#d4af37] px-6 py-2.5 font-semibold text-[#0a0e1a] transition-colors duration-200 hover:from-[#f0c75e] hover:to-[#e8853a];
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/5 px-6 py-2.5 font-semibold text-white transition-colors duration-200 hover:border-[#d4af37]/40 hover:bg-white/10;
+  }
+
+  .card-surface {
+    background: var(--bg-surface-2);
+    border: 1px solid var(--border-default);
+  }
+
+  .scrollbar-hidden {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none;
+  }
+
+  .row-scroll {
+    @apply flex gap-4 overflow-x-auto pb-2 scrollbar-hidden;
+    scroll-snap-type: x proximity;
+  }
+  .row-scroll > * {
+    scroll-snap-align: start;
+    flex-shrink: 0;
+  }
+}
+
+@layer utilities {
+  .text-gold-gradient {
+    background: linear-gradient(to bottom, #f0c75e, #d4af37);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .fade-in {
+    animation: fadeIn 0.25s ease-out;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .scale-in {
+    animation: scaleIn 0.2s ease-out;
+  }
+  @keyframes scaleIn {
+    from { opacity: 0; transform: scale(0.96); }
+    to { opacity: 1; transform: scale(1); }
+  }
+}
+
+/* Custom scrollbar for the whole app */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-base);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--bg-elevated);
+  border-radius: 6px;
+  border: 2px solid var(--bg-base);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2a3a5a;
+}

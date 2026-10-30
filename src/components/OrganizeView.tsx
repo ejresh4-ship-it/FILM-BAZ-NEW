@@ -1,0 +1,438 @@
+import { useState, useEffect, useMemo } from 'react';
+import {
+  ChevronLeft,
+  Sparkles,
+  AlertTriangle,
+  CheckCircle2,
+  XCircle,
+  Edit3,
+  Check,
+  X,
+  Loader2,
+  FolderTree,
+  ArrowLeft,
+} from 'lucide-react';
+import type { OrgProposal, OrgOperation, OrgExecutionResult } from '@/types/media-library';
+import { getLibraryService } from '@/services/LibraryService';
+import { formatFileSize, mediaTypeLabel, identificationLabel } from '@/lib/mediaFormat';
+import { toPersianDigits } from '@/lib/movieUtils';
+import { getFilesystemService } from '@/services/filesystemFactory';
+
+interface OrganizeViewProps {
+  folderId: string;
+  onBack: () => void;
+  onViewLog: () => void;
+}
+
+export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeViewProps) {
+  const service = getLibraryService();
+  const fs = getFilesystemService();
+  const [proposal, setProposal] = useState<OrgProposal | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [editingOpId, setEditingOpId] = useState<string | null>(null);
+  const [editFolderName, setEditFolderName] = useState('');
+  const [executing, setExecuting] = useState(false);
+  const [execResult, setExecResult] = useState<OrgExecutionResult | null>(null);
+
+  useEffect(() => {
+    generate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [folderId]);
+
+  async function generate() {
+    setLoading(true);
+    setError(null);
+    setExecResult(null);
+    try {
+      const p = await service.generateProposal(folderId);
+      setProposal(p);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'خطا در ساخت پیشنهاد');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleExclude(opId: string) {
+    if (!proposal) return;
+    setProposal(service.toggleExclude(proposal, opId));
+  }
+
+  function startEdit(op: OrgOperation) {
+    setEditingOpId(op.id);
+    const folderName = fs.baseName(op.destFolderPath);
+    setEditFolderName(folderName);
+  }
+
+  function applyEdit(opId: string) {
+    if (!proposal || !editFolderName.trim()) return;
+    setProposal(service.updateOperationDest(proposal, opId, editFolderName.trim()));
+    setEditingOpId(null);
+  }
+
+  function cancelEdit() {
+    setEditingOpId(null);
+  }
+
+  async function execute() {
+    if (!proposal) return;
+    const activeOps = proposal.operations.filter((o) => !o.excluded);
+    if (activeOps.length === 0) return;
+
+    const conflicts = activeOps.filter((o) => o.destFileExists);
+    const uncertainMsg = activeOps.some((o) => o.uncertain);
+    const warningParts = [];
+    if (conflicts.length > 0) warningParts.push(`${conflicts.length} مورد تداخل دارند`);
+    if (uncertainMsg) warningParts.push('برخی موارد نیازمند بررسی هستند');
+
+    const message =
+      `آیا از اجرای ${toPersianDigits(activeOps.length)} عملیات انتقال مطمئن هستید؟` +
+      (warningParts.length > 0 ? `\n\nتوجه: ${warningParts.join(' و ')}.` : '') +
+      '\n\nهیچ فایل بازنویسی یا حذف نمی‌شود.';
+    if (!window.confirm(message)) return;
+
+    setExecuting(true);
+    setError(null);
+    try {
+      const result = await service.executeProposal(proposal);
+      setExecResult(result);
+      // Recalc proposal to reflect any state changes
+      const updated = service.recalcProposal(proposal);
+      setProposal(updated);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'خطا در اجرای عملیات');
+    } finally {
+      setExecuting(false);
+    }
+  }
+
+  const activeOps = useMemo(() => (proposal ? proposal.operations.filter((o) => !o.excluded) : []), [proposal]);
+  const excludedCount = proposal ? proposal.operations.length - activeOps.length : 0;
+
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-[1200px] px-4 py-6 lg:px-8 fade-in">
+        <BackButton onBack={onBack} />
+        <div className="flex h-64 items-center justify-center">
+          <Loader2 size={32} className="animate-spin text-gold-bright" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="mx-auto max-w-[1200px] px-4 py-6 lg:px-8 fade-in">
+        <BackButton onBack={onBack} />
+        <div className="mt-4 flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3">
+          <XCircle size={18} className="text-red-400" />
+          <p className="text-sm text-red-300">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-[1200px] px-4 py-6 lg:px-8 fade-in">
+      <BackButton onBack={onBack} />
+
+      <div className="mb-6">
+        <h1 className="flex items-center gap-2 text-2xl font-extrabold text-white">
+          <Sparkles size={24} className="text-gold-bright" />
+          سازماندهی فایل‌ها
+        </h1>
+        <p className="mt-1 text-sm text-text-muted">
+          پیش‌نمایش عملیات پیشنهادی قبل از اجرا — هیچ تغییری بدون تأیید شما انجام نمی‌شود
+        </p>
+      </div>
+
+      {proposal && proposal.operations.length === 0 ? (
+        <div className="flex h-48 items-center justify-center rounded-xl border border-dashed border-white/10 bg-surface/50">
+          <div className="text-center">
+            <CheckCircle2 size={32} className="mx-auto mb-2 text-green-400" />
+            <p className="text-sm font-medium text-white">کتابخانه منظم است</p>
+            <p className="mt-1 text-xs text-text-muted">فایل نیازمند سازماندهی‌ای یافت نشد</p>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Summary */}
+          <div className="mb-5 flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-surface-2 p-4">
+            <FolderTree size={20} className="text-gold-bright" />
+            <div className="flex flex-wrap gap-4 text-sm">
+              <span className="text-text-secondary">
+                <span className="font-bold text-white">{toPersianDigits(activeOps.length)}</span> عملیات پیشنهادی
+              </span>
+              {excludedCount > 0 && (
+                <span className="text-text-muted">{toPersianDigits(excludedCount)} مورد مستثنی</span>
+              )}
+              {proposal!.conflicts > 0 && (
+                <span className="inline-flex items-center gap-1 text-orange-400">
+                  <AlertTriangle size={14} />
+                  {toPersianDigits(proposal!.conflicts)} تداخل
+                </span>
+              )}
+              {proposal!.uncertainCount > 0 && (
+                <span className="inline-flex items-center gap-1 text-amber-400">
+                  <AlertTriangle size={14} />
+                  {toPersianDigits(proposal!.uncertainCount)} نیازمند بررسی
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Safety notice */}
+          <div className="mb-5 flex items-start gap-3 rounded-lg border border-gold/15 bg-gold/5 p-3.5">
+            <AlertTriangle size={18} className="mt-0.5 flex-shrink-0 text-gold-bright" />
+            <div>
+              <p className="text-sm font-medium text-white">ایمنی فایل‌ها</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-text-secondary">
+                فایل‌ها جابه‌جا می‌شوند نه حذف. اگر فایل مقصد از قبل وجود داشته باشد، عملیات برای آن مورد انجام نمی‌شود.
+                پس از اجرا، امکان بازگشت (Undo) برای هر عملیات موفق فراهم است.
+              </p>
+            </div>
+          </div>
+
+          {/* Execution result */}
+          {execResult && (
+            <div className="mb-5 rounded-xl border border-white/10 bg-surface-2 p-4 fade-in">
+              <h3 className="mb-3 text-sm font-bold text-white">نتیجه اجرا</h3>
+              <div className="flex flex-wrap gap-4 text-sm">
+                <span className="inline-flex items-center gap-1 text-green-400">
+                  <CheckCircle2 size={16} />
+                  {toPersianDigits(execResult.succeeded.length)} موفق
+                </span>
+                {execResult.failed.length > 0 && (
+                  <span className="inline-flex items-center gap-1 text-red-400">
+                    <XCircle size={16} />
+                    {toPersianDigits(execResult.failed.length)} ناموفق
+                  </span>
+                )}
+              </div>
+              {execResult.failed.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {execResult.failed.map((f, idx) => (
+                    <div key={idx} className="rounded-lg bg-red-500/5 p-2 text-xs">
+                      <p className="text-red-300">{f.error}</p>
+                      <p className="mt-0.5 truncate text-text-muted" dir="ltr">{f.operation.sourcePath}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button
+                onClick={onViewLog}
+                className="mt-3 text-xs text-gold-bright hover:underline"
+              >
+                مشاهده گزارش کامل عملیات ←
+              </button>
+            </div>
+          )}
+
+          {/* Operations list */}
+          <div className="space-y-2.5">
+            {proposal!.operations.map((op) => {
+              const item = service.getItems().find((i) => i.id === op.itemId);
+              const isEditing = editingOpId === op.id;
+              return (
+                <div
+                  key={op.id}
+                  className={`rounded-xl border p-4 transition-all ${
+                    op.excluded
+                      ? 'border-white/5 bg-surface/30 opacity-50'
+                      : op.destFileExists
+                        ? 'border-orange-500/30 bg-orange-500/5'
+                        : 'border-white/10 bg-surface-2'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    {/* Status icon */}
+                    <div className="flex-shrink-0 pt-0.5">
+                      {op.excluded ? (
+                        <X size={18} className="text-text-muted" />
+                      ) : op.destFileExists ? (
+                        <AlertTriangle size={18} className="text-orange-400" />
+                      ) : op.uncertain ? (
+                        <AlertTriangle size={18} className="text-amber-400" />
+                      ) : (
+                        <ArrowLeft size={18} className="text-gold-bright" />
+                      )}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-white" dir="ltr">
+                            {fs.baseName(op.sourcePath)}
+                          </p>
+                          {item && (
+                            <div className="mt-1 flex flex-wrap gap-2 text-xs text-text-muted">
+                              <span>{mediaTypeLabel(item.mediaType)}</span>
+                              <span>·</span>
+                              <span>{formatFileSize(item.fileSize)}</span>
+                              {item.identification === 'needs-review' && (
+                                <>
+                                  <span>·</span>
+                                  <span className="text-amber-400">{identificationLabel(item.identification)}</span>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          {!isEditing && !op.excluded && (
+                            <button
+                              onClick={() => startEdit(op)}
+                              className="rounded p-1.5 text-text-muted transition-colors hover:bg-white/10 hover:text-white"
+                              aria-label="ویرایش نام پوشه مقصد"
+                              title="ویرایش نام پوشه"
+                            >
+                              <Edit3 size={15} />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleExclude(op.id)}
+                            className={`rounded p-1.5 transition-colors ${
+                              op.excluded
+                                ? 'text-green-400 hover:bg-green-500/10'
+                                : 'text-text-muted hover:bg-white/10 hover:text-white'
+                            }`}
+                            aria-label={op.excluded ? 'بازگرداندن مورد' : 'مستثنی کردن مورد'}
+                            title={op.excluded ? 'بازگرداندن' : 'مستثنی کردن'}
+                          >
+                            {op.excluded ? <Check size={15} /> : <X size={15} />}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Path mapping */}
+                      <div className="mt-3 rounded-lg bg-base/50 p-2.5 text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="flex-shrink-0 text-text-muted">از:</span>
+                          <span className="truncate text-text-secondary" dir="ltr">{op.sourcePath}</span>
+                        </div>
+                        <div className="mt-1.5 flex items-center gap-2">
+                          <span className="flex-shrink-0 text-text-muted">به:</span>
+                          {isEditing ? (
+                            <div className="flex flex-1 items-center gap-2">
+                              <input
+                                type="text"
+                                value={editFolderName}
+                                onChange={(e) => setEditFolderName(e.target.value)}
+                                dir="ltr"
+                                className="flex-1 rounded border border-gold/40 bg-base px-2 py-1 text-xs text-white focus:outline-none"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') applyEdit(op.id);
+                                  if (e.key === 'Escape') cancelEdit();
+                                }}
+                              />
+                              <button
+                                onClick={() => applyEdit(op.id)}
+                                className="rounded bg-gold/20 p-1 text-gold-bright hover:bg-gold/30"
+                              >
+                                <Check size={14} />
+                              </button>
+                              <button
+                                onClick={cancelEdit}
+                                className="rounded bg-white/5 p-1 text-text-muted hover:text-white"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="truncate text-gold-bright" dir="ltr">{op.destFilePath}</span>
+                          )}
+                        </div>
+
+                        {/* Related subtitles */}
+                        {op.relatedSubtitles.length > 0 && !isEditing && (
+                          <div className="mt-2 border-t border-white/5 pt-2">
+                            <p className="text-text-muted">زیرنویس‌های همراه ({toPersianDigits(op.relatedSubtitles.length)}):</p>
+                            {op.relatedSubtitles.map((sub, sidx) => (
+                              <p key={sidx} className="mt-0.5 truncate text-text-secondary" dir="ltr">
+                                {sub.fileName}
+                                {sub.language && <span className="text-text-muted"> [{sub.language}]</span>}
+                              </p>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Conflict/uncertain warnings */}
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {op.destFileExists && (
+                          <span className="inline-flex items-center gap-1 rounded bg-orange-500/10 px-2 py-0.5 text-xs text-orange-400">
+                            <AlertTriangle size={12} />
+                            تداخل: فایل مقصد وجود دارد — عملیات انجام نمی‌شود
+                          </span>
+                        )}
+                        {op.uncertain && (
+                          <span className="inline-flex items-center gap-1 rounded bg-amber-500/10 px-2 py-0.5 text-xs text-amber-400">
+                            <AlertTriangle size={12} />
+                            شناسایی نامطمئن — نام پوشه را بررسی کنید
+                          </span>
+                        )}
+                        {op.excluded && (
+                          <span className="rounded bg-white/5 px-2 py-0.5 text-xs text-text-muted">
+                            مستثنی شده از اجرا
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Action bar */}
+          {!execResult && (
+            <div className="sticky bottom-4 mt-6 flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-surface/95 p-4 shadow-cinematic backdrop-blur-md">
+              <p className="text-sm text-text-secondary">
+                {toPersianDigits(activeOps.length)} عملیات آماده اجرا
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={onBack}
+                  className="rounded-lg border border-white/15 bg-white/5 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+                >
+                  لغو همه
+                </button>
+                <button
+                  onClick={execute}
+                  disabled={executing || activeOps.length === 0}
+                  className="btn-primary text-sm disabled:opacity-50"
+                >
+                  {executing ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      در حال اجرا…
+                    </>
+                  ) : (
+                    <>
+                      <Check size={16} />
+                      تأیید و اجرا
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function BackButton({ onBack }: { onBack: () => void }) {
+  return (
+    <button
+      onClick={onBack}
+      className="mb-4 inline-flex items-center gap-1.5 text-sm text-text-secondary transition-colors hover:text-gold-bright"
+    >
+      <ChevronLeft size={18} className="rotate-180" />
+      بازگشت
+    </button>
+  );
+}
