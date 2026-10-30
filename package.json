@@ -60,7 +60,7 @@
     "files": [
   "dist/**/*",
   "electron/dist/electron/**/*.js",
-  "electron/dist/package.json"
+  "electron/package.json"
 ],
     "win": {
       "icon": "src-tauri/icons/icon.ico",
