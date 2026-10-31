@@ -159,7 +159,7 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
           سازماندهی فایل‌ها
         </h1>
         <p className="mt-1 text-sm text-text-muted">
-          پیش‌نمایش عملیات پیشنهادی قبل از اجرا — هیچ تغییری بدون تأیید شما انجام نمی‌شود
+          همه موارد این پوشه به‌صورت گروهی و پشت‌سرهم سامان‌دهی می‌شوند؛ هیچ تغییری بدون تأیید شما انجام نمی‌شود
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <button onClick={() => void enrichWholeFolder()} disabled={metadataBusy} className="btn-primary text-sm disabled:opacity-50">
@@ -424,7 +424,7 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
           {!execResult && (
             <div className="sticky bottom-4 mt-6 flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-surface/95 p-4 shadow-cinematic backdrop-blur-md">
               <p className="text-sm text-text-secondary">
-                {toPersianDigits(activeOps.length)} عملیات آماده اجرا
+                {toPersianDigits(activeOps.length)} مورد آماده سامان‌دهی گروهی
               </p>
               <div className="flex items-center gap-2">
                 <button
@@ -446,7 +446,7 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
                   ) : (
                     <>
                       <Check size={16} />
-                      تأیید و اجرا
+                      سامان‌دهی همه موارد
                     </>
                   )}
                 </button>
