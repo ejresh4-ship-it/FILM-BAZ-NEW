@@ -48,6 +48,7 @@ export interface MovieMetadata {
   genres: string[];
   runtime: number; // minutes, 0 if unknown
   rating: number; // 0-10, 0 if unavailable
+  ratingSource?: string;
   voteCount?: number;
   director?: string;
   cast: MetadataPerson[]; // up to 10 principal cast
