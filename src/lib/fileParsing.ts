@@ -67,6 +67,7 @@ function cleanTitle(raw: string): string {
   // Remove quality tags first, so a trailing group after x265/1080p becomes separable.
   t = t.replace(NOISE, ' ');
   t = t.replace(/(?:^|[ .])-[A-Z0-9][A-Z0-9._-]{1,}$/i, ' ');
+  t = t.replace(/-(?:[A-Z][a-z0-9]+){2,}|-[A-Z0-9]{3,}$/, ' ');
   t = t.replace(/[._]/g, ' ');
   t = t.replace(/\s+/g, ' ').trim();
   // Title-case
