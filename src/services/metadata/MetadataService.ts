@@ -299,10 +299,17 @@ class MetadataService {
     const candidates = await this.searchCandidates(item, signal);
     const ranked = candidates.filter((candidate) => candidate.matchScore >= 65)
       .sort((a, b) => b.matchScore - a.matchScore);
-    if (!ranked.length) return null;
+    const providerSeen = new Set<string>();
+    const uniqueRanked = ranked.filter((candidate) => {
+      const key = candidate.providerName.toLowerCase();
+      if (providerSeen.has(key)) return false;
+      providerSeen.add(key);
+      return true;
+    });
+    if (!uniqueRanked.length) return null;
 
     const fetched: MovieMetadata[] = [];
-    for (const candidate of ranked.slice(0, 6)) {
+    for (const candidate of uniqueRanked.slice(0, 4)) {
       if (signal?.aborted) throw new DOMException('لغو شد', 'AbortError');
       try {
         const metadata = await this.fetchAndCache(candidate, item.id, signal);
@@ -460,7 +467,7 @@ class MetadataService {
 
   /** Check whether any enabled provider has a real API key configured. */
   isMockMode(): boolean {
-    return !this.configs.some((c) => c.enabled && c.apiKey && c.apiKey.trim().length > 0);
+    return !this.configs.some((c) => c.enabled && (['wikidata', 'mediawiki', 'tvmaze'].includes(c.id) || (c.apiKey && c.apiKey.trim().length > 0)));
   }
 }
 
