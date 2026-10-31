@@ -54,6 +54,7 @@ export interface DesktopBridge {
   stat(path: string): Promise<import('./filesystem').FileInfo>;
   exists(path: string): Promise<boolean>;
   createDir(path: string): Promise<{ success: boolean; error?: string }>;
+  removeEmptyDirectory(path: string, selectedRoot: string): Promise<{ success: boolean; error?: string }>;
   moveFile(source: string, dest: string): Promise<import('./filesystem').MoveResult>;
   writeTextFile(path: string, content: string): Promise<{ success: boolean; error?: string }>;
   downloadFile(url: string, destPath: string): Promise<{ success: boolean; error?: string }>;
