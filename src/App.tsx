@@ -12,6 +12,7 @@ import OrganizeView from '@/components/OrganizeView';
 import OperationLogView from '@/components/OperationLogView';
 import MetadataReviewView from '@/components/MetadataReviewView';
 import AIAssistantView from '@/components/AIAssistantView';
+import ToolsView from '@/components/ToolsView';
 import { getMovieById, pickRandom } from '@/lib/movieUtils';
 import { buildLibraryMovieEntries, type LibraryMovieEntry } from '@/lib/libraryMovieAdapter';
 import { getLibraryService } from '@/services/LibraryService';
@@ -173,6 +174,8 @@ export default function App() {
           <OperationLogView onBack={() => setShowLog(false)} />
         ) : activeView === 'assistant' ? (
           <AIAssistantView movies={libraryMovies} />
+        ) : activeView === 'tools' ? (
+          <ToolsView />
         ) : activeView === 'settings' ? (
           <SettingsView onBack={() => navigate('home')} onNavigateLibrary={() => navigate('library')} />
         ) : null}
