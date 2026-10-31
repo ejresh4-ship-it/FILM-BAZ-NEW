@@ -256,6 +256,51 @@ ipcMain.handle('fs:baseName', async (_evt, p: string): Promise<string> => {
   return path.basename(p);
 });
 
+
+
+// Remove one strictly-empty child directory. Never recursive: rmdir only succeeds
+// for an empty directory. The selected library root itself is never removable.
+ipcMain.handle('fs:removeEmptyDirectory', async (_evt, targetPath: string, selectedRoot: string): Promise<{ success: boolean; error?: string }> => {
+  try {
+    if (typeof targetPath !== 'string' || typeof selectedRoot !== 'string' || !path.isAbsolute(targetPath) || !path.isAbsolute(selectedRoot)) {
+      return { success: false, error: 'مسیر نامعتبر است' };
+    }
+    const root = path.resolve(selectedRoot);
+    const target = path.resolve(targetPath);
+    const relative = path.relative(root, target);
+    if (!relative || relative === '.' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) {
+      return { success: false, error: 'فقط زیرپوشه‌های مسیر آرشیو قابل حذف هستند؛ پوشه اصلی محافظت می‌شود' };
+    }
+    const rootStat = await fs.promises.lstat(root);
+    if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
+      return { success: false, error: 'مسیر اصلی آرشیو پوشه معتبر و امنی نیست' };
+    }
+    const targetStat = await fs.promises.lstat(target);
+    if (!targetStat.isDirectory() || targetStat.isSymbolicLink()) {
+      return { success: false, error: 'مسیر انتخاب‌شده پوشه عادی نیست یا پیوند نمادین است' };
+    }
+    const realRoot = await fs.promises.realpath(root);
+    const realTarget = await fs.promises.realpath(target);
+    const realRelative = path.relative(realRoot, realTarget);
+    if (!realRelative || realRelative.startsWith('..' + path.sep) || path.isAbsolute(realRelative)) {
+      return { success: false, error: 'مسیر واقعی پوشه خارج از آرشیو است' };
+    }
+    const entries = await fs.promises.readdir(target);
+    if (entries.length !== 0) {
+      return { success: false, error: 'پوشه دیگر خالی نیست؛ هیچ فایلی حذف نشد' };
+    }
+    // Re-check immediately before rmdir to reduce the scan/delete race window.
+    const finalStat = await fs.promises.lstat(target);
+    if (!finalStat.isDirectory() || finalStat.isSymbolicLink() || (await fs.promises.readdir(target)).length !== 0) {
+      return { success: false, error: 'وضعیت پوشه تغییر کرده است؛ عملیات لغو شد' };
+    }
+    await fs.promises.rmdir(target);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : String(e) };
+  }
+});
+
 // --- IPC: Player discovery ---
 
 ipcMain.handle('player:detect', async (): Promise<DetectedPlayer[]> => {
