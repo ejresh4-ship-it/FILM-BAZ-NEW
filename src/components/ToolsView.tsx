@@ -52,7 +52,7 @@ export default function ToolsView() {
         for (const candidate of candidates) {
           const children = await fs.listDir(candidate.path);
           const isEmpty = children.length === 0;
-          const prefix = candidate.path.endsWith('\\\\') || candidate.path.endsWith('/') ? candidate.path : candidate.path + (candidate.path.includes('\\\\') ? '\\\\' : '/');
+          const prefix = candidate.path.endsWith('\\') || candidate.path.endsWith('/') ? candidate.path : candidate.path + (candidate.path.includes('\\') ? '\\' : '/');
           const descendants = entries.filter((entry: DirEntry) => entry.path.startsWith(prefix));
           const files = descendants.filter((entry: DirEntry) => entry.isFile).length;
           const bytes = descendants.reduce((sum, entry) => sum + (entry.isFile ? entry.size : 0), 0);
