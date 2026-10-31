@@ -17,6 +17,7 @@ import { getLibraryService } from '@/services/LibraryService';
 import { formatFileSize, mediaTypeLabel, identificationLabel } from '@/lib/mediaFormat';
 import { toPersianDigits } from '@/lib/movieUtils';
 import { getFilesystemService } from '@/services/filesystemFactory';
+import { getMetadataService } from '@/services/metadata/MetadataService';
 
 interface OrganizeViewProps {
   folderId: string;
@@ -34,6 +35,9 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
   const [editFolderName, setEditFolderName] = useState('');
   const [executing, setExecuting] = useState(false);
   const [execResult, setExecResult] = useState<OrgExecutionResult | null>(null);
+  const [metadataBusy, setMetadataBusy] = useState(false);
+  const [metadataProgress, setMetadataProgress] = useState({ completed: 0, total: 0, current: '', succeeded: 0, failed: 0 });
+  const [metadataFailures, setMetadataFailures] = useState<Array<{ fileName: string; reason: string }>>([]);
 
   useEffect(() => {
     generate();
@@ -75,6 +79,15 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
     setEditingOpId(null);
   }
 
+  async function enrichWholeFolder() {
+    if (metadataBusy) return;
+    const items = service.getItemsForFolder(folderId);
+    if (items.length === 0) { setError('فایلی برای تکمیل اطلاعات در این پوشه پیدا نشد.'); return; }
+    setMetadataBusy(true); setMetadataFailures([]);
+    setMetadataProgress({ completed: 0, total: items.length, current: '', succeeded: 0, failed: 0 });
+    try { const result = await getMetadataService().enrichItems(items, setMetadataProgress); setMetadataFailures(result.failed); }
+    finally { setMetadataBusy(false); }
+  }
   async function execute() {
     if (!proposal) return;
     const activeOps = proposal.operations.filter((o) => !o.excluded);
@@ -97,6 +110,7 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
     try {
       const result = await service.executeProposal(proposal);
       setExecResult(result);
+      await enrichWholeFolder();
       // Recalc proposal to reflect any state changes
       const updated = service.recalcProposal(proposal);
       setProposal(updated);
@@ -145,6 +159,24 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
         <p className="mt-1 text-sm text-text-muted">
           پیش‌نمایش عملیات پیشنهادی قبل از اجرا — هیچ تغییری بدون تأیید شما انجام نمی‌شود
         </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button onClick={() => void enrichWholeFolder()} disabled={metadataBusy} className="btn-primary text-sm disabled:opacity-50">
+            {metadataBusy ? <><Loader2 size={16} className="animate-spin" /> تکمیل اطلاعات…</> : <><Sparkles size={16} /> تکمیل اطلاعات تمام فیلم‌های پوشه</>}
+          </button>
+          <span className="text-xs text-text-muted">پوستر، داستان، بازیگران، کارگردان و ژانر از منابع فعال</span>
+        </div>
+        {metadataProgress.total > 0 && (
+          <div className="mt-3 rounded-lg border border-white/10 bg-surface-2 p-3">
+            <div className="mb-2 flex flex-wrap justify-between gap-2 text-xs text-text-secondary">
+              <span>پیشرفت تکمیل اطلاعات: {toPersianDigits(metadataProgress.completed)} از {toPersianDigits(metadataProgress.total)}</span>
+              <span>{toPersianDigits(Math.round(metadataProgress.completed / metadataProgress.total * 100))}٪</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gold transition-all" style={{ width: (metadataProgress.completed / metadataProgress.total * 100) + '%' }} /></div>
+            {metadataProgress.current && <p className="mt-2 truncate text-xs text-text-muted" dir="ltr">{metadataProgress.current}</p>}
+            <p className="mt-1 text-xs text-text-muted">{toPersianDigits(metadataProgress.succeeded)} موفق · {toPersianDigits(metadataProgress.failed)} ناموفق</p>
+            {metadataFailures.length > 0 && <div className="mt-2 max-h-32 space-y-1 overflow-y-auto">{metadataFailures.map((failure, index) => <p key={index} className="text-xs text-amber-300">{failure.fileName}: {failure.reason}</p>)}</div>}
+          </div>
+        )}
       </div>
 
       {proposal && proposal.operations.length === 0 ? (
@@ -401,7 +433,7 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
                 </button>
                 <button
                   onClick={execute}
-                  disabled={executing || activeOps.length === 0}
+                  disabled={executing || metadataBusy || activeOps.length === 0}
                   className="btn-primary text-sm disabled:opacity-50"
                 >
                   {executing ? (
