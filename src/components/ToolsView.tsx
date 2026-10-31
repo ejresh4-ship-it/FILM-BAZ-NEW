@@ -4,6 +4,7 @@ import { getLibraryService } from '@/services/LibraryService';
 import { getFilesystemService } from '@/services/filesystemFactory';
 import type { LibraryFolder } from '@/types/media-library';
 import type { DirEntry } from '@/types/filesystem';
+import { isDesktopRuntime } from '@/services/filesystemFactory';
 
 type Finding = { path: string; name: string; root: string; empty: boolean; files: number; bytes: number; symlink: boolean };
 
@@ -21,6 +22,9 @@ export default function ToolsView() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
+  const [checked, setChecked] = useState<string[]>([]);
+  const [notice, setNotice] = useState('');
+  const desktop = isDesktopRuntime() && !!window.filmBazDesktop;
 
   useEffect(() => {
     const load = async () => {
@@ -57,13 +61,31 @@ export default function ToolsView() {
         }
       }
       setFindings(found.sort((a, b) => Number(b.empty) - Number(a.empty) || a.path.localeCompare(b.path)));
+      setChecked([]);
       setDone(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'اسکن پوشه‌ها ناموفق بود.');
     } finally { setBusy(false); }
   }, [selected]);
 
-  const emptyCount = findings.filter((item) => item.empty).length;
+  const removable = findings.filter((item) => item.empty && item.path !== item.root);
+  const emptyCount = removable.length;
+  const removeSelected = async () => {
+    if (!window.filmBazDesktop || checked.length === 0) return;
+    const selectedItems = removable.filter((item) => checked.includes(item.path));
+    if (!window.confirm('تأیید نهایی: پوشه‌های کاملاً خالی انتخاب‌شده حذف شوند؟')) return;
+    setBusy(true); setNotice(''); setError('');
+    let succeeded = 0; let failed = 0;
+    try {
+      for (const item of selectedItems) {
+        const result = await window.filmBazDesktop.removeEmptyDirectory(item.path, item.root);
+        if (result.success) succeeded++; else failed++;
+      }
+      setNotice(succeeded + ' پوشه حذف شد؛ ' + failed + ' مورد ناموفق بود.');
+      setChecked([]);
+      await scan();
+    } finally { setBusy(false); }
+  };
   return <div className="mx-auto max-w-[1200px] px-4 py-8 lg:px-8 fade-in" dir="rtl">
     <div className="mb-6 flex items-center gap-3"><div className="rounded-xl bg-gold/10 p-3 text-gold-bright"><Wrench size={24}/></div><div><h1 className="text-2xl font-extrabold text-white">ابزارها</h1><p className="mt-1 text-sm text-text-muted">پاک‌سازی و سامان‌دهی آرشیو</p></div></div>
     <section className="rounded-xl border border-white/10 bg-surface-2 p-5">
