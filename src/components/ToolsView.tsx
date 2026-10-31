@@ -5,7 +5,7 @@ import { getFilesystemService, isDesktopRuntime } from '@/services/filesystemFac
 import type { LibraryFolder } from '@/types/media-library';
 import type { DirEntry } from '@/types/filesystem';
 
-type Finding = { path: string; name: string; root: string; empty: boolean; files: number; bytes: number; symlink: boolean };
+type Finding = { path: string; name: string; root: string; empty: boolean; files: number; directories: number; bytes: number; symlink: boolean };
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -55,9 +55,10 @@ export default function ToolsView() {
           const prefix = candidate.path.endsWith('\\') || candidate.path.endsWith('/') ? candidate.path : candidate.path + (candidate.path.includes('\\') ? '\\' : '/');
           const descendants = entries.filter((entry: DirEntry) => entry.path.startsWith(prefix));
           const files = descendants.filter((entry: DirEntry) => entry.isFile).length;
+          const directories = descendants.filter((entry: DirEntry) => entry.isDirectory && !entry.isSymlink).length;
           const bytes = descendants.reduce((sum, entry) => sum + (entry.isFile ? entry.size : 0), 0);
-          if (isEmpty || files > 0 || children.length > 0) {
-            found.push({ path: candidate.path, name: candidate.name, root: root.path, empty: isEmpty, files, bytes, symlink: false });
+          if (isEmpty || files > 0 || directories > 0 || children.length > 0) {
+            found.push({ path: candidate.path, name: candidate.name, root: root.path, empty: isEmpty, files, directories, bytes, symlink: false });
           }
         }
       }
@@ -97,8 +98,12 @@ export default function ToolsView() {
       {error && <p role="alert" className="mt-3 text-sm text-red-400">{error}</p>}
     </section>
     {done && <section className="mt-6 rounded-xl border border-white/10 bg-surface-2 p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-bold text-white">گزارش بررسی</h2><p className="mt-1 text-sm text-text-muted">{findings.length} پوشه بررسی شد؛ {emptyCount} زیرپوشه خالی قابل حذف پیدا شد.</p></div><span className="rounded-lg bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300"><CheckCircle2 className="ml-1 inline" size={16}/> پیش‌نمایش آماده است</span></div>
-      <div className="mt-4 space-y-2">{findings.map((item) => <div key={item.path} className="rounded-lg border border-white/5 p-3"><div className="flex items-start gap-2">{item.empty && item.path !== item.root && <input aria-label="انتخاب پوشه خالی" type="checkbox" checked={checked.includes(item.path)} onChange={(event) => setChecked((current) => event.target.checked ? [...current, item.path] : current.filter((value) => value !== item.path))} disabled={!desktop || busy}/>}<Folder size={18} className={item.empty ? 'text-emerald-400' : 'text-text-muted'}/><div className="min-w-0 flex-1"><p className="break-all text-sm font-medium text-white">{item.name}</p><p className="break-all text-xs text-text-muted">{item.path}</p><p className="mt-1 text-xs text-text-secondary">{item.empty ? 'کاملاً خالی' : `${item.files} فایل مستقیم · ${formatBytes(item.bytes)}`}</p></div><span className={item.empty ? 'text-xs text-emerald-300' : 'text-xs text-amber-300'}>{item.empty ? 'قابل بررسی برای حذف' : 'دارای محتوا'}</span></div></div>)}</div>
+      <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-bold text-white">گزارش بررسی</h2><p className="mt-1 text-sm text-text-muted">{findings.length.toLocaleString('fa-IR')} پوشه بررسی شد؛ {emptyCount.toLocaleString('fa-IR')} زیرپوشه خالی قابل حذف پیدا شد. تعداد و حجم فایل‌ها به‌صورت بازگشتی و شامل محتویات زیرپوشه‌ها محاسبه شده است.</p></div><span className="rounded-lg bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300"><CheckCircle2 className="ml-1 inline" size={16}/> پیش‌نمایش آماده است</span></div>
+      <div className="mt-4 space-y-2">{findings.map((item) => <div key={item.path} className="rounded-lg border border-white/5 p-3"><div className="flex items-start gap-2">{item.empty && item.path !== item.root && <input aria-label="انتخاب پوشه خالی" type="checkbox" checked={checked.includes(item.path)} onChange={(event) => setChecked((current) => event.target.checked ? [...current, item.path] : current.filter((value) => value !== item.path))} disabled={!desktop || busy}/>}<Folder size={18} className={item.empty ? 'text-emerald-400' : 'text-text-muted'}/><div className="min-w-0 flex-1"><p className="break-all text-sm font-medium text-white">{item.name}</p><p className="break-all text-xs text-text-muted">{item.path}</p><div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+              <div className="rounded-md bg-white/5 px-2.5 py-2"><p className="text-[11px] text-text-muted">تعداد کل فایل‌ها</p><p className="mt-0.5 text-sm font-semibold text-white">{item.files.toLocaleString('fa-IR')}</p></div>
+              <div className="rounded-md bg-white/5 px-2.5 py-2"><p className="text-[11px] text-text-muted">تعداد زیرپوشه‌ها</p><p className="mt-0.5 text-sm font-semibold text-white">{item.directories.toLocaleString('fa-IR')}</p></div>
+              <div className="rounded-md bg-white/5 px-2.5 py-2"><p className="text-[11px] text-text-muted">حجم کل محتوا</p><p className="mt-0.5 text-sm font-semibold text-white">{formatBytes(item.bytes)}</p></div>
+            </div></div><span className={item.empty ? 'text-xs text-emerald-300' : 'text-xs text-amber-300'}>{item.empty ? 'قابل بررسی برای حذف' : 'دارای محتوا'}</span></div></div>)}</div>
       {notice && <p role="status" className="mt-4 rounded-lg bg-emerald-500/10 p-3 text-sm text-emerald-300">{notice}</p>}
 <div className="mt-4 flex flex-wrap items-center gap-3">
 <button onClick={() => setChecked(removable.map((item) => item.path))} disabled={!desktop || removable.length === 0 || busy} className="rounded-lg border border-white/15 px-3 py-2 text-sm text-text-secondary disabled:opacity-40">انتخاب همه پوشه‌های خالی</button>
