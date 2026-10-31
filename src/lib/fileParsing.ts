@@ -64,9 +64,10 @@ function cleanTitle(raw: string): string {
   let t = raw.replace(BRACKETED_TAG, ' ');
   t = t.replace(SITE_OR_RELEASE_TAG, ' ');
   t = t.replace(/(?:^|[ ._-])(?:yts|yify|rarbg|eztv|ettv|tgx|pahe|psa|ganool|galaxyrg|psarips)(?:$|[ ._-].*)/i, ' ');
+  // Remove quality tags first, so a trailing group after x265/1080p becomes separable.
+  t = t.replace(NOISE, ' ');
   t = t.replace(/(?:^|[ .])-[A-Z0-9][A-Z0-9._-]{1,}$/i, ' ');
   t = t.replace(/[._]/g, ' ');
-  t = t.replace(NOISE, ' ');
   t = t.replace(/\s+/g, ' ').trim();
   // Title-case
   if (t) t = t.charAt(0).toUpperCase() + t.slice(1);
