@@ -35,7 +35,9 @@ export default function App() {
   const [playLoading, setPlayLoading] = useState(false);
   const [playingTitle, setPlayingTitle] = useState('');
   const [libraryEntries, setLibraryEntries] = useState<LibraryMovieEntry[]>([]);
+  const [enrichmentLoadingIds, setEnrichmentLoadingIds] = useState<Set<string>>(new Set());
   const enrichmentInFlight = useRef(new Set<string>());
+  const enrichmentAttempted = useRef(new Set<string>());
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('film-baz:theme');
@@ -71,7 +73,7 @@ export default function App() {
     const library = getLibraryService();
     const metadataService = getMetadataService();
     const item = library.getItems().find((entry) => entry.id === id);
-    if (!item || enrichmentInFlight.current.has(id)) return;
+    if (!item || enrichmentInFlight.current.has(id) || enrichmentAttempted.current.has(id)) return;
 
     const metadata = metadataService.getMetadataForItem(id);
     if (metadata?.manuallyCorrected) return;
@@ -81,7 +83,9 @@ export default function App() {
       || !metadata.director;
     if (!needsEnrichment) return;
 
+    enrichmentAttempted.current.add(id);
     enrichmentInFlight.current.add(id);
+    setEnrichmentLoadingIds((current) => new Set(current).add(id));
     void metadataService.enrichItem(item)
       .then(() => {
         setLibraryEntries(buildLibraryMovieEntries(library.getItems(), metadataService));
@@ -91,6 +95,11 @@ export default function App() {
       })
       .finally(() => {
         enrichmentInFlight.current.delete(id);
+        setEnrichmentLoadingIds((current) => {
+          const next = new Set(current);
+          next.delete(id);
+          return next;
+        });
       });
   }, []);
 
@@ -219,6 +228,7 @@ export default function App() {
           onClose={closeQuickView}
           onPlay={handlePlay}
           onOpenDetails={openDetails}
+          isEnriching={enrichmentLoadingIds.has(quickViewId)}
         />
       )}
 
