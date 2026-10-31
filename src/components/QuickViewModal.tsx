@@ -8,9 +8,10 @@ interface QuickViewModalProps {
   onClose: () => void;
   onPlay: (id: string) => void;
   onOpenDetails: (id: string) => void;
+  isEnriching?: boolean;
 }
 
-export default function QuickViewModal({ movie, onClose, onPlay, onOpenDetails }: QuickViewModalProps) {
+export default function QuickViewModal({ movie, onClose, onPlay, onOpenDetails, isEnriching = false }: QuickViewModalProps) {
   const [posterError, setPosterError] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -117,6 +118,13 @@ export default function QuickViewModal({ movie, onClose, onPlay, onOpenDetails }
               )}
             </div>
 
+            {isEnriching && (
+              <div className="mt-3 flex items-center gap-2 text-xs text-gold-bright" role="status" aria-live="polite">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-gold-bright" />
+                در حال دریافت امتیاز و خلاصه داستان از منابع اطلاعاتی...
+              </div>
+            )}
+
             {/* Genres */}
             {movie.genres.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-1.5">
@@ -143,7 +151,7 @@ export default function QuickViewModal({ movie, onClose, onPlay, onOpenDetails }
             <div className="mt-3">
               <p className="mb-1 text-xs font-semibold text-text-muted">خلاصه داستان</p>
               <p className="text-sm leading-relaxed text-text-secondary line-clamp-4">
-                {movie.synopsis && !movie.synopsis.includes('اطلاعات تکمیلی برای این عنوان ثبت نشده') ? movie.synopsis : 'خلاصه داستان هنوز از منابع فعال پیدا نشده است.'}
+                {movie.synopsis && !movie.synopsis.includes('اطلاعات تکمیلی برای این عنوان ثبت نشده') ? movie.synopsis : isEnriching ? 'در حال بررسی منابع اطلاعاتی...' : 'خلاصه داستان هنوز از منابع فعال پیدا نشده است.'}
               </p>
             </div>
 
