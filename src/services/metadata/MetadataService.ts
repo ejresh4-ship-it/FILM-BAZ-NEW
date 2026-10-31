@@ -339,7 +339,7 @@ class MetadataService {
     const primary = fetched[0];
     const merged: MovieMetadata = { ...primary, cast: [...primary.cast], genres: [...primary.genres] };
     for (const extra of fetched.slice(1)) {
-      if (extra.overview && (!merged.overview || (extra.overviewLanguage === 'fa' && merged.overviewLanguage !== 'fa'))) {
+      if (extra.rating > 0 && (!(merged.rating > 0) || extra.voteCount && (!merged.voteCount || extra.voteCount > merged.voteCount))) {\n        merged.rating = extra.rating;\n        merged.voteCount = extra.voteCount;\n      }\n      if (extra.overview && (!merged.overview || (extra.overviewLanguage === 'fa' && merged.overviewLanguage !== 'fa'))) {
         merged.overview = extra.overview;
         merged.overviewLanguage = extra.overviewLanguage;
       }
