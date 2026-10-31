@@ -44,6 +44,7 @@ export interface MovieMetadata {
   year: number;
   releaseDate?: string; // ISO date
   overview?: string;
+  overviewLanguage?: 'fa' | 'en' | 'unknown';
   genres: string[];
   runtime: number; // minutes, 0 if unknown
   rating: number; // 0-10, 0 if unavailable
