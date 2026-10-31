@@ -35,6 +35,12 @@ export default function App() {
   const [playingTitle, setPlayingTitle] = useState('');
   const [libraryEntries, setLibraryEntries] = useState<LibraryMovieEntry[]>([]);
 
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('film-baz:theme');
+    document.documentElement.dataset.theme =
+      savedTheme === 'gold' || savedTheme === 'neon' ? savedTheme : 'dark';
+  }, []);
+
   const loadLibrary = useCallback(async () => {
     const library = getLibraryService();
     const metadata = getMetadataService();
