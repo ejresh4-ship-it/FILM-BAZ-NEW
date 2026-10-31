@@ -98,7 +98,7 @@ export interface ProviderConfig {
   supportsPersianTitles: boolean;
 }
 
-export type ProviderType = 'tmdb' | 'omdb' | 'custom';
+export type ProviderType = 'tmdb' | 'omdb' | 'wikidata' | 'mediawiki' | 'tvmaze' | 'custom';
 
 /** Provider lookup mode. */
 export type LookupMode = 'automatic' | 'manual' | 'combined';
