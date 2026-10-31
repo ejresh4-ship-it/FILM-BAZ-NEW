@@ -208,6 +208,7 @@ class MetadataService {
   ): Promise<MatchCandidate[]> {
     await this.load();
     const query = item.titleGuess || stripExtension(item.fileName);
+    const mediaType = item.mediaType === 'episode' ? 'series' : item.mediaType === 'unknown' ? 'movie' : item.mediaType;
     const providers = this.getEnabledProviders();
 
     if (providers.length === 0) {
@@ -216,7 +217,7 @@ class MetadataService {
 
     const results = await Promise.allSettled(
       providers.map(({ provider, config }) =>
-        provider.search(query, item.yearGuess, item.mediaType, config, signal),
+        provider.search(query, item.yearGuess, mediaType, config, signal),
       ),
     );
 
