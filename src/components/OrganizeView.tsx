@@ -86,6 +86,7 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
     setMetadataBusy(true); setMetadataFailures([]);
     setMetadataProgress({ completed: 0, total: items.length, current: '', succeeded: 0, failed: 0 });
     try { const result = await getMetadataService().enrichItems(items, setMetadataProgress); setMetadataFailures(result.failed); }
+    catch (e) { setError(e instanceof Error ? e.message : 'تکمیل اطلاعات ناموفق بود'); }
     finally { setMetadataBusy(false); }
   }
   async function execute() {
