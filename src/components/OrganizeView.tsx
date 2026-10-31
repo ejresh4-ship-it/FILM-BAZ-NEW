@@ -18,6 +18,7 @@ import { formatFileSize, mediaTypeLabel, identificationLabel } from '@/lib/media
 import { toPersianDigits } from '@/lib/movieUtils';
 import { getFilesystemService } from '@/services/filesystemFactory';
 import { getMetadataService } from '@/services/metadata/MetadataService';
+import { notifyLibraryUpdated } from '@/services/libraryEvents';
 
 interface OrganizeViewProps {
   folderId: string;
@@ -85,7 +86,7 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
     if (items.length === 0) { setError('فایلی برای تکمیل اطلاعات در این پوشه پیدا نشد.'); return; }
     setMetadataBusy(true); setMetadataFailures([]);
     setMetadataProgress({ completed: 0, total: items.length, current: '', succeeded: 0, failed: 0 });
-    try { const result = await getMetadataService().enrichItems(items, setMetadataProgress); setMetadataFailures(result.failed); }
+    try { const result = await getMetadataService().enrichItems(items, setMetadataProgress); setMetadataFailures(result.failed); notifyLibraryUpdated(); }
     catch (e) { setError(e instanceof Error ? e.message : 'تکمیل اطلاعات ناموفق بود'); }
     finally { setMetadataBusy(false); }
   }
