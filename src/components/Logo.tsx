@@ -1,3 +1,5 @@
+import { useId } from 'react';
+
 interface LogoProps {
   size?: 'sm' | 'md' | 'lg';
   showText?: boolean;
@@ -7,7 +9,8 @@ interface LogoProps {
 export default function Logo({ size = 'md', showText = true, className = '' }: LogoProps) {
   // Keep the existing dimensions so the header layout does not shift.
   const dims = size === 'sm' ? 36 : size === 'lg' ? 56 : 44;
-  const iconId = `film-baz-icon-${size}`;
+  const instanceId = useId().replace(/:/g, '');
+  const iconId = `film-baz-icon-${size}-${instanceId}`;
 
   return (
     <div className={`flex items-center gap-2.5 ${className}`} dir="rtl">
