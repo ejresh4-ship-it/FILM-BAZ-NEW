@@ -50,6 +50,7 @@ contextBridge.exposeInMainWorld('filmBazDesktop', {
   writeTextFile: (path: string, content: string): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('fs:writeTextFile', path, content),
   downloadFile: (url: string, destPath: string): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('fs:downloadFile', url, destPath),
   isSymlink: (p: string): Promise<boolean> => ipcRenderer.invoke('fs:isSymlink', p),
+  removeEmptyDirectory: (p: string, root: string): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('fs:removeEmptyDirectory', p, root),
   normalizePath: (p: string): Promise<string> => ipcRenderer.invoke('fs:normalizePath', p),
   joinPath: (...segments: string[]): Promise<string> => ipcRenderer.invoke('fs:joinPath', ...segments),
   parentPath: (p: string): Promise<string> => ipcRenderer.invoke('fs:parentPath', p),
