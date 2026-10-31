@@ -46,6 +46,7 @@ contextBridge.exposeInMainWorld('filmBazDesktop', {
   stat: (p: string): Promise<FileInfo> => ipcRenderer.invoke('fs:stat', p),
   exists: (p: string): Promise<boolean> => ipcRenderer.invoke('fs:exists', p),
   createDir: (p: string): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('fs:createDir', p),
+  removeEmptyDirectory: (p: string, root: string): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('fs:removeEmptyDirectory', p, root),
   moveFile: (source: string, dest: string): Promise<MoveResult> => ipcRenderer.invoke('fs:moveFile', source, dest),
   writeTextFile: (path: string, content: string): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('fs:writeTextFile', path, content),
   downloadFile: (url: string, destPath: string): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('fs:downloadFile', url, destPath),
