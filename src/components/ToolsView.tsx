@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Wrench, RefreshCw, Folder, AlertTriangle, CheckCircle2, HardDrive } from 'lucide-react';
 import { getLibraryService } from '@/services/LibraryService';
-import { getFilesystemService } from '@/services/filesystemFactory';
+import { getFilesystemService, isDesktopRuntime } from '@/services/filesystemFactory';
 import type { LibraryFolder } from '@/types/media-library';
 import type { DirEntry } from '@/types/filesystem';
-import { isDesktopRuntime } from '@/services/filesystemFactory';
 
 type Finding = { path: string; name: string; root: string; empty: boolean; files: number; bytes: number; symlink: boolean };
 
@@ -53,8 +52,10 @@ export default function ToolsView() {
         for (const candidate of candidates) {
           const children = await fs.listDir(candidate.path);
           const isEmpty = children.length === 0;
-          const files = children.filter((child) => child.isFile || child.isSymlink).length;
-          const bytes = children.reduce((sum, child) => sum + (child.isFile ? child.size : 0), 0);
+          const prefix = candidate.path.endsWith('\\\\') || candidate.path.endsWith('/') ? candidate.path : candidate.path + (candidate.path.includes('\\\\') ? '\\\\' : '/');
+          const descendants = entries.filter((entry: DirEntry) => entry.path.startsWith(prefix));
+          const files = descendants.filter((entry: DirEntry) => entry.isFile).length;
+          const bytes = descendants.reduce((sum, entry) => sum + (entry.isFile ? entry.size : 0), 0);
           if (isEmpty || files > 0 || children.length > 0) {
             found.push({ path: candidate.path, name: candidate.name, root: root.path, empty: isEmpty, files, bytes, symlink: false });
           }
