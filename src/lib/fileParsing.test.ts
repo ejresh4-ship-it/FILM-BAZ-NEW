@@ -48,6 +48,19 @@ describe('parseFileName', () => {
     expect(r.confident).toBe(true);
   });
 
+
+  it('strips download site names and release tags from movie titles', () => {
+    const r = parseFileName('Inception.2010.1080p.BluRay.x265-DownloadSite.mkv');
+    expect(r.titleGuess).toBe('Inception');
+    expect(r.yearGuess).toBe(2010);
+  });
+
+  it('strips website suffixes without losing the original title', () => {
+    const r = parseFileName('The.Matrix.1999.1080p.www.example.com.mkv');
+    expect(r.titleGuess).toBe('The Matrix');
+    expect(r.yearGuess).toBe(1999);
+  });
+
   it('parses a series episode with S01E05', () => {
     const r = parseFileName('Breaking.Bad.S01E05.720p.WEB-DL.mkv');
     expect(r.mediaType).toBe('episode');
