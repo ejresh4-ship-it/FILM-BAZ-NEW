@@ -281,6 +281,21 @@ class MetadataService {
       }
     }
 
+    if (metadata.overview && metadata.overviewLanguage !== 'fa') {
+      try {
+        const ai = getAIService();
+        if (ai.isConfigured()) {
+          const translatedOverview = await ai.translate(metadata.overview);
+          if (translatedOverview && translatedOverview !== metadata.overview) {
+            metadata.overview = translatedOverview;
+            metadata.overviewLanguage = 'fa';
+          }
+        }
+      } catch {
+        // Keep the original synopsis if translation is unavailable.
+      }
+    }
+
     this.cache.set(metadata.id, metadata);
     this.itemToMetadata.set(itemId, metadata.id);
     await this.persistCache();
