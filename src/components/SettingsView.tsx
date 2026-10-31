@@ -75,9 +75,9 @@ type SectionId = (typeof sections)[number]['id'];
 
 export default function SettingsView({ onBack, onNavigateLibrary }: SettingsViewProps) {
   const [activeSection, setActiveSection] = useState<SectionId>('appearance');
-  const [theme, setTheme] = useState<'dark' | 'gold'>(() => {
+  const [theme, setTheme] = useState<'dark' | 'gold' | 'neon'>(() => {
     const saved = localStorage.getItem('film-baz:theme');
-    return saved === 'gold' ? 'gold' : 'dark';
+    return saved === 'gold' || saved === 'neon' ? saved : 'dark';
   });
 
   useEffect(() => {
@@ -142,6 +142,12 @@ export default function SettingsView({ onBack, onNavigateLibrary }: SettingsView
                       active={theme === 'gold'}
                       onClick={() => setTheme('gold')}
                       swatch="linear-gradient(135deg, #0d1320, #d4af37)"
+                    />
+                    <ThemeOption
+                      label="Midnight Neon"
+                      active={theme === 'neon'}
+                      onClick={() => setTheme('neon')}
+                      swatch="linear-gradient(135deg, #080b20 0%, #7028d8 55%, #08b9ff 100%)"
                     />
                   </div>
                 </div>
