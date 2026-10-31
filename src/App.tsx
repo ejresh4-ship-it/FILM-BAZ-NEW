@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import Header, { type NavView } from '@/components/Header';
 import HomePage from '@/components/HomePage';
 import QuickViewModal from '@/components/QuickViewModal';
@@ -35,6 +35,7 @@ export default function App() {
   const [playLoading, setPlayLoading] = useState(false);
   const [playingTitle, setPlayingTitle] = useState('');
   const [libraryEntries, setLibraryEntries] = useState<LibraryMovieEntry[]>([]);
+  const enrichmentInFlight = useRef(new Set<string>());
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('film-baz:theme');
@@ -66,6 +67,31 @@ export default function App() {
   const openQuickView = useCallback((id: string) => {
     if (!id) return;
     setQuickViewId(id);
+
+    const library = getLibraryService();
+    const metadataService = getMetadataService();
+    const item = library.getItems().find((entry) => entry.id === id);
+    if (!item || enrichmentInFlight.current.has(id)) return;
+
+    const metadata = metadataService.getMetadataForItem(id);
+    if (metadata?.manuallyCorrected) return;
+    const needsEnrichment = !metadata
+      || !(metadata.rating > 0)
+      || !metadata.overview
+      || !metadata.director;
+    if (!needsEnrichment) return;
+
+    enrichmentInFlight.current.add(id);
+    void metadataService.enrichItem(item)
+      .then(() => {
+        setLibraryEntries(buildLibraryMovieEntries(library.getItems(), metadataService));
+      })
+      .catch(() => {
+        // The quick view remains usable with cached/local information if providers fail.
+      })
+      .finally(() => {
+        enrichmentInFlight.current.delete(id);
+      });
   }, []);
 
   const closeQuickView = useCallback(() => setQuickViewId(null), []);
