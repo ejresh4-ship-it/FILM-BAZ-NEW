@@ -58,30 +58,23 @@ app.on('window-all-closed', () => {
 // --- IPC: Filesystem operations ---
 
 ipcMain.handle('fs:listDir', async (_evt, dirPath: string): Promise<DirEntry[]> => {
-  try {
-    const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
-    const results: DirEntry[] = [];
-    for (const entry of entries) {
-      let stat: fs.Stats | null = null;
-      try {
-        stat = await fs.promises.stat(path.join(dirPath, entry.name));
-      } catch {
-        // skip entries we can't stat (permission issues)
-      }
-      results.push({
-        name: entry.name,
-        path: path.join(dirPath, entry.name),
-        isDirectory: entry.isDirectory(),
-        isFile: entry.isFile(),
-        isSymlink: entry.isSymbolicLink(),
-        size: stat?.size ?? 0,
-        lastModified: stat?.mtimeMs ?? 0,
-      });
-    }
-    return results;
-  } catch {
-    return [];
+  // Fail closed: permission/stat errors must never look like an empty directory.
+  const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
+  const results: DirEntry[] = [];
+  for (const entry of entries) {
+    const fullPath = path.join(dirPath, entry.name);
+    const stat = await fs.promises.lstat(fullPath);
+    results.push({
+      name: entry.name,
+      path: fullPath,
+      isDirectory: stat.isDirectory() && !stat.isSymbolicLink(),
+      isFile: stat.isFile(),
+      isSymlink: stat.isSymbolicLink(),
+      size: stat.size,
+      lastModified: stat.mtimeMs,
+    });
   }
+  return results;
 });
 
 ipcMain.handle('fs:scanDir', async (
