@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Play, Info, Star, Clock, Calendar } from 'lucide-react';
+import { X, Play, Info, Star, Clock, Calendar, User } from 'lucide-react';
 import type { Movie } from '@/types/movie';
 import { formatRuntime, toPersianDigits } from '@/lib/movieUtils';
 
