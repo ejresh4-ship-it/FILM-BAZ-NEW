@@ -63,7 +63,7 @@ const BRACKETED_TAG = /\[[^\]]*(?:www\.|\.com|\.net|\.org|\b(?:rarbg|yts|yify|et
 function cleanTitle(raw: string): string {
   let t = raw.replace(BRACKETED_TAG, ' ').replace(/\bSITE DOMAIN\b/gi, ' ');
   t = t.replace(SITE_OR_RELEASE_TAG, ' ');
-  t = t.replace(/(?:^|[ ._-])(?:yts|yify|rarbg|eztv|ettv|tgx|pahe|psa|ganool|galaxyrg|psarips)(?:$|[ ._-].*)/i, ' ');
+  t = t.replace(/(?:^|[ ._-])(?:mymovies|my[-_ ]?movies|yts|yify|rarbg|eztv|ettv|tgx|pahe|psa|ganool|galaxyrg|psarips|mkvcinemas|worldfree4u|filmyzilla|moviesmod|mkvhub)(?:$|[ ._-].*)/i, ' ');
   // Remove quality tags first, so a trailing group after x265/1080p becomes separable.
   t = t.replace(NOISE, ' ');
   t = t.replace(/(?:^|[ .])-[A-Z0-9][A-Z0-9._-]{1,}$/i, ' ');
