@@ -42,7 +42,7 @@ export default function App() {
   useEffect(() => {
     const savedTheme = localStorage.getItem('film-baz:theme');
     document.documentElement.dataset.theme =
-      savedTheme === 'gold' || savedTheme === 'neon' ? savedTheme : 'dark';
+      savedTheme === 'gold' || savedTheme === 'neon' || savedTheme === 'crimson' ? savedTheme : 'dark';
   }, []);
 
   const loadLibrary = useCallback(async () => {
