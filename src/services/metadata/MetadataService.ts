@@ -344,7 +344,8 @@ class MetadataService {
         merged.rating = extra.rating;
         merged.voteCount = extra.voteCount;
         merged.ratingSource = extra.providerName;
-      }\n      if (extra.overview && (!merged.overview || (extra.overviewLanguage === 'fa' && merged.overviewLanguage !== 'fa'))) {
+      }
+      if (extra.overview && (!merged.overview || (extra.overviewLanguage === 'fa' && merged.overviewLanguage !== 'fa'))) {
         merged.overview = extra.overview;
         merged.overviewLanguage = extra.overviewLanguage;
       }
