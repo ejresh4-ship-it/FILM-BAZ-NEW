@@ -55,7 +55,20 @@ describe('parseFileName', () => {
     expect(r.yearGuess).toBe(2010);
   });
 
-  it('strips MyMovies branding and similar release-site suffixes', () => {\n    const myMovies = parseFileName('The.Matrix.1999.1080p.BluRay.x264-MyMovies.mkv');\n    expect(myMovies.titleGuess).toBe('The Matrix');\n    expect(myMovies.yearGuess).toBe(1999);\n\n    const branded = parseFileName('Inception.2010.WEB-DL.MyMovies.com.mkv');\n    expect(branded.titleGuess).toBe('Inception');\n    expect(branded.yearGuess).toBe(2010);\n\n    const otherSite = parseFileName('Interstellar.2014.1080p-Filmyzilla.mkv');\n    expect(otherSite.titleGuess).toBe('Interstellar');\n  });\n\n  it('strips website suffixes without losing the original title', () => {
+  it('strips MyMovies branding and similar release-site suffixes', () => {
+    const myMovies = parseFileName('The.Matrix.1999.1080p.BluRay.x264-MyMovies.mkv');
+    expect(myMovies.titleGuess).toBe('The Matrix');
+    expect(myMovies.yearGuess).toBe(1999);
+
+    const branded = parseFileName('Inception.2010.WEB-DL.MyMovies.com.mkv');
+    expect(branded.titleGuess).toBe('Inception');
+    expect(branded.yearGuess).toBe(2010);
+
+    const otherSite = parseFileName('Interstellar.2014.1080p-Filmyzilla.mkv');
+    expect(otherSite.titleGuess).toBe('Interstellar');
+  });
+
+  it('strips website suffixes without losing the original title', () => {
     const r = parseFileName('The.Matrix.1999.1080p.www.example.com.mkv');
     expect(r.titleGuess).toBe('The Matrix');
     expect(r.yearGuess).toBe(1999);
