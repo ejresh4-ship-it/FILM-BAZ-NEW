@@ -58,6 +58,8 @@ export interface DesktopBridge {
   writeTextFile(path: string, content: string): Promise<{ success: boolean; error?: string }>;
   downloadFile(url: string, destPath: string): Promise<{ success: boolean; error?: string }>;
   isSymlink(path: string): Promise<boolean>;
+  /** Safely remove a strictly-empty child directory, never the selected root. */
+  removeEmptyDirectory(path: string, selectedRoot: string): Promise<{ success: boolean; error?: string }>; 
   normalizePath(path: string): Promise<string>;
   joinPath(...segments: string[]): Promise<string>;
   parentPath(path: string): Promise<string>;
