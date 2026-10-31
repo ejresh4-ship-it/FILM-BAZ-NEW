@@ -71,7 +71,7 @@ class AIService {
     this.configs = configs ?? DEFAULT_PROVIDERS;
     // Migrate only the known retired built-in Cloudflare model; preserve custom models.
     const cloudflare = this.configs.find((provider) => provider.id === 'cloudflare');
-    if (cloudflare && ['@cf/qwen/qwen1.5-14b-chat-awq', '@cf/meta/llama-3.1-8b-instruct', 'llama-3.1-8b-instruct'].includes(cloudflare.model || '')) {
+    if (cloudflare && ['@cf/qwen/qwen1.5-14b-chat-awq', '@cf/meta/llama-3.1-8b-instruct', 'llama-3.1-8b-instruct', '@cf/meta/infire-llama-3.1-8b-instruct'].includes(cloudflare.model || '')) {
       cloudflare.model = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
       await idbSet(AI_CONFIG_KEY, this.configs);
     }

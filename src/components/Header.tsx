@@ -3,7 +3,7 @@ import { Search, Settings, Download, X } from 'lucide-react';
 import Logo from './Logo';
 import type { Movie } from '@/types/movie';
 
-export type NavView = 'home' | 'movies' | 'series' | 'kids' | 'genres' | 'settings' | 'library';
+export type NavView = 'home' | 'movies' | 'series' | 'kids' | 'genres' | 'settings' | 'library' | 'assistant';
 
 interface HeaderProps {
   activeView: NavView;
@@ -19,6 +19,7 @@ const navItems: { id: NavView; label: string }[] = [
   { id: 'kids', label: 'کودک' },
   { id: 'genres', label: 'ژانرها' },
   { id: 'library', label: 'کتابخانه' },
+  { id: 'assistant', label: 'دستیار هوشمند' },
 ];
 
 interface SearchResult {

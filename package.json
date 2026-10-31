@@ -58,11 +58,11 @@
       "output": "release"
     },
     "files": [
-  "dist/**/*",
-  "electron/dist/electron/**/*.js",
-  "electron/package.json",
-  "src-tauri/icons/icon.ico"
-],
+      "dist/**/*",
+      "electron/dist/electron/**/*.js",
+      "electron/package.json",
+      "src-tauri/icons/icon.ico"
+    ],
     "win": {
       "icon": "src-tauri/icons/icon.ico",
       "target": [
@@ -75,8 +75,7 @@
       ],
       "artifactName": "FilmBaz-Setup-${version}.${ext}",
       "forceCodeSigning": false,
-      "signtoolOptions": null,
-      "signAndEditExecutable": false
+      "signtoolOptions": null
     },
     "nsis": {
       "oneClick": false,
@@ -84,7 +83,10 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "FILM BAZ"
+      "shortcutName": "FILM BAZ",
+      "installerIcon": "src-tauri/icons/icon.ico",
+      "uninstallerIcon": "src-tauri/icons/icon.ico",
+      "installerHeaderIcon": "src-tauri/icons/icon.ico"
     }
   }
 }
