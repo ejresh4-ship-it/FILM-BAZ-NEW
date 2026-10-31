@@ -57,8 +57,15 @@ const NOISE = new RegExp(
   'gi',
 );
 
+const SITE_OR_RELEASE_TAG = /(?:^|[ ._])(?:www\\.)?[a-z0-9-]+\\.(?:com|net|org|ir|co|to|io|tv)(?:\\.[a-z]{2,})?(?:[ ._-].*)?$/i;
+const BRACKETED_TAG = /\\[[^\\]]*(?:www\\.|\\.com|\\.net|\\.org|\\b(?:rarbg|yts|yify|ettv|eztv|tgx|pahe|psa|ganool)\\b)[^\\]]*\\]/ig;
+
 function cleanTitle(raw: string): string {
-  let t = raw.replace(/[._]/g, ' ');
+  let t = raw.replace(BRACKETED_TAG, ' ');
+  t = t.replace(SITE_OR_RELEASE_TAG, ' ');
+  t = t.replace(/(?:^|[ ._-])(?:yts|yify|rarbg|eztv|ettv|tgx|pahe|psa|ganool|galaxyrg|psarips)(?:$|[ ._-].*)/i, ' ');
+  t = t.replace(/(?:^|[ .])-[A-Z0-9][A-Z0-9._-]{1,}$/i, ' ');
+  t = t.replace(/[._]/g, ' ');
   t = t.replace(NOISE, ' ');
   t = t.replace(/\s+/g, ' ').trim();
   // Title-case
