@@ -61,7 +61,7 @@ const SITE_OR_RELEASE_TAG = /(?:^|[ ._])(?:www\.)?[a-z0-9-]+\.(?:com|net|org|ir|
 const BRACKETED_TAG = /\[[^\]]*(?:www\.|\.com|\.net|\.org|\b(?:rarbg|yts|yify|ettv|eztv|tgx|pahe|psa|ganool)\b)[^\]]*\]/ig;
 
 function cleanTitle(raw: string): string {
-  let t = raw.replace(BRACKETED_TAG, ' ');
+  let t = raw.replace(BRACKETED_TAG, ' ').replace(/\\bSITE DOMAIN\\b/gi, ' ');
   t = t.replace(SITE_OR_RELEASE_TAG, ' ');
   t = t.replace(/(?:^|[ ._-])(?:yts|yify|rarbg|eztv|ettv|tgx|pahe|psa|ganool|galaxyrg|psarips)(?:$|[ ._-].*)/i, ' ');
   // Remove quality tags first, so a trailing group after x265/1080p becomes separable.
@@ -76,7 +76,9 @@ function cleanTitle(raw: string): string {
 
 export function parseFileName(fileName: string): ParsedFilename {
   const base = stripExtension(fileName);
-  const normalized = base.replace(/[._]/g, ' ');
+  const normalized = base
+    .replace(/(?:www\\.)?[a-z0-9-]+\\.(?:com|net|org|ir|co|to|io|tv)(?:\\.[a-z]{2,})?/ig, ' SITE DOMAIN ')
+    .replace(/[._]/g, ' ');
   let work = normalized;
 
   // Season/Episode → series
