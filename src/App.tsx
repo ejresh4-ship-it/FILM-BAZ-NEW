@@ -228,7 +228,7 @@ export default function App() {
           onClose={closeQuickView}
           onPlay={handlePlay}
           onOpenDetails={openDetails}
-          isEnriching={enrichmentLoadingIds.has(quickViewId)}
+          isEnriching={quickViewId !== null && enrichmentLoadingIds.has(quickViewId)}
         />
       )}
 
