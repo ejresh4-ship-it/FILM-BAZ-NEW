@@ -155,7 +155,7 @@ export function parseFileName(fileName: string): ParsedFilename {
 
 /** Build a proposed folder name like "The Matrix (1999)". */
 export function buildFolderName(title: string, year?: number): string {
-  const safe = title.replace(/[\/:*?"<>|]/g, '').trim();
+  const safe = title.replace(/[\\/:*?"<>|]/g, '').trim();
   return year ? `${safe} (${year})` : safe;
 }
 
