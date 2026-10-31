@@ -57,8 +57,8 @@ const NOISE = new RegExp(
   'gi',
 );
 
-const SITE_OR_RELEASE_TAG = /(?:^|[ ._])(?:www\\.)?[a-z0-9-]+\\.(?:com|net|org|ir|co|to|io|tv)(?:\\.[a-z]{2,})?(?:[ ._-].*)?$/i;
-const BRACKETED_TAG = /\\[[^\\]]*(?:www\\.|\\.com|\\.net|\\.org|\\b(?:rarbg|yts|yify|ettv|eztv|tgx|pahe|psa|ganool)\\b)[^\\]]*\\]/ig;
+const SITE_OR_RELEASE_TAG = /(?:^|[ ._])(?:www\.)?[a-z0-9-]+\.(?:com|net|org|ir|co|to|io|tv)(?:\.[a-z]{2,})?(?:[ ._-].*)?$/i;
+const BRACKETED_TAG = /\[[^\]]*(?:www\.|\.com|\.net|\.org|\b(?:rarbg|yts|yify|ettv|eztv|tgx|pahe|psa|ganool)\b)[^\]]*\]/ig;
 
 function cleanTitle(raw: string): string {
   let t = raw.replace(BRACKETED_TAG, ' ');
@@ -151,7 +151,7 @@ export function parseFileName(fileName: string): ParsedFilename {
 
 /** Build a proposed folder name like "The Matrix (1999)". */
 export function buildFolderName(title: string, year?: number): string {
-  const safe = title.replace(/[\\/:*?"<>|]/g, '').trim();
+  const safe = title.replace(/[\/:*?"<>|]/g, '').trim();
   return year ? `${safe} (${year})` : safe;
 }
 
