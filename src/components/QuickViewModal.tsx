@@ -111,6 +111,8 @@ export default function QuickViewModal({ movie, onClose, onPlay, onOpenDetails }
                 <span className="inline-flex items-center gap-1">
                   <Star size={13} className="fill-gold-bright text-gold-bright" />
                   {toPersianDigits(movie.rating.toFixed(1))}
+                  {movie.ratingSource && <span className="text-[10px] text-text-muted">({movie.ratingSource})</span>}
+                  {movie.voteCount ? <span className="text-[10px] text-text-muted">· {toPersianDigits(movie.voteCount)} رأی</span> : null}
                 </span>
               )}
             </div>
@@ -129,10 +131,21 @@ export default function QuickViewModal({ movie, onClose, onPlay, onOpenDetails }
               </div>
             )}
 
+            {/* Director */}
+            {movie.director && (
+              <div className="mt-3 flex items-center gap-1.5 text-xs text-text-secondary">
+                <User size={13} className="text-text-muted" />
+                <span className="text-text-muted">کارگردان:</span> {movie.director}
+              </div>
+            )}
+
             {/* Synopsis */}
-            <p className="mt-3 text-sm leading-relaxed text-text-secondary line-clamp-4">
-              {movie.synopsis}
-            </p>
+            <div className="mt-3">
+              <p className="mb-1 text-xs font-semibold text-text-muted">خلاصه داستان</p>
+              <p className="text-sm leading-relaxed text-text-secondary line-clamp-4">
+                {movie.synopsis && !movie.synopsis.includes('اطلاعات تکمیلی برای این عنوان ثبت نشده') ? movie.synopsis : 'خلاصه داستان هنوز از منابع فعال پیدا نشده است.'}
+              </p>
+            </div>
 
             {/* Cast */}
             {movie.cast.length > 0 && (
