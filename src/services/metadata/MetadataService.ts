@@ -265,6 +265,7 @@ class MetadataService {
 
     metadata.matchedItemId = itemId;
     metadata.cachedAt = Date.now();
+    if (metadata.rating > 0 && !metadata.ratingSource) metadata.ratingSource = metadata.providerName;
 
     // Auto-translate title to Persian if AI is configured and no Persian title yet
     if (!metadata.persianTitle) {
@@ -342,6 +343,7 @@ class MetadataService {
       if (extra.rating > 0 && (!(merged.rating > 0) || (extra.voteCount ?? 0) > (merged.voteCount ?? 0))) {
         merged.rating = extra.rating;
         merged.voteCount = extra.voteCount;
+        merged.ratingSource = extra.providerName;
       }\n      if (extra.overview && (!merged.overview || (extra.overviewLanguage === 'fa' && merged.overviewLanguage !== 'fa'))) {
         merged.overview = extra.overview;
         merged.overviewLanguage = extra.overviewLanguage;
