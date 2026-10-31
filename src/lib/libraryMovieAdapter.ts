@@ -21,6 +21,8 @@ export function mediaItemToMovie(item: MediaItem, metadata?: MovieMetadata): Mov
     year: metadata?.year || item.yearGuess || 0,
     runtime: metadata?.runtime || 0,
     rating: metadata?.rating || 0,
+    ratingSource: metadata?.providerName,
+    voteCount: metadata?.voteCount,
     genres: metadata?.genres ?? [],
     category: isSeries ? 'series' : 'movie',
     director: metadata?.director,
