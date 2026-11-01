@@ -1,8 +1,11 @@
 import { useMemo, useState } from 'react';
-import { ArrowRight, Play, Star, Clock, CalendarDays } from 'lucide-react';
+import { ArrowRight, Play, Star, Clock, CalendarDays, FolderTree, Loader2 } from 'lucide-react';
 import type { Movie } from '@/types/movie';
 import type { LibraryMovieEntry } from '@/lib/libraryMovieAdapter';
 import { formatRuntime, toPersianDigits } from '@/lib/movieUtils';
+import { getFilesystemService } from '@/services/filesystemFactory';
+import { getLibraryService } from '@/services/LibraryService';
+import { notifyLibraryUpdated } from '@/services/libraryEvents';
 
 interface SeriesDetailsProps {
   movie: Movie;
@@ -15,14 +18,66 @@ export default function SeriesDetails({ movie, entries, onBack, onPlay }: Series
   const seasons = useMemo(() => {
     const grouped = new Map<number, LibraryMovieEntry[]>();
     for (const entry of entries) {
-      const season = entry.item.seasonGuess || 1;
+      const season = entry.item.seasonGuess ?? 0;
       grouped.set(season, [...(grouped.get(season) ?? []), entry]);
     }
     return [...grouped.entries()].sort((a, b) => a[0] - b[0]);
   }, [entries]);
-  const [selectedSeason, setSelectedSeason] = useState<number>(seasons[0]?.[0] ?? 1);
-  const episodes = (seasons.find(([season]) => season === selectedSeason)?.[1] ?? [])
+  const [selectedSeason, setSelectedSeason] = useState<number>(seasons.find(([s]) => s > 0)?.[0] ?? seasons[0]?.[0] ?? 0);
+  const [organizing, setOrganizing] = useState(false);
+  const [organizeMessage, setOrganizeMessage] = useState('');
+  const episodes = [...(seasons.find(([season]) => season === selectedSeason)?.[1] ?? [])]
     .sort((a, b) => (a.item.episodeGuess ?? 0) - (b.item.episodeGuess ?? 0));
+
+  const organizeSeasons = async () => {
+    if (!window.confirm('فقط قسمت‌هایی که شماره فصل و قسمت آن‌ها با اطمینان شناسایی شده، به پوشه سریال و فصل مربوط منتقل شوند؟ فایل مقصد هرگز بازنویسی نمی‌شود.')) return;
+    setOrganizing(true);
+    setOrganizeMessage('');
+    const fs = getFilesystemService();
+    const library = getLibraryService();
+    let moved = 0;
+    let skipped = 0;
+    const affectedFolders = new Set<string>();
+    try {
+      const seriesName = (movie.englishTitle || movie.title).replace(/[\\/:*?"<>|]/g, '').trim();
+      if (!seriesName) throw new Error('نام معتبر برای پوشه سریال پیدا نشد.');
+      for (const entry of entries) {
+        const item = entry.item;
+        const season = item.seasonGuess ?? 0;
+        const episode = item.episodeGuess ?? 0;
+        if (item.mediaType !== 'episode' || item.identification !== 'identified' || season < 1 || episode < 1) {
+          skipped++;
+          continue;
+        }
+        const root = library.getFolders().find(folder => folder.id === item.folderId);
+        if (!root) { skipped++; continue; }
+        const seriesDir = fs.joinPath(root.path, seriesName);
+        const seasonDir = fs.joinPath(seriesDir, `Season ${String(season).padStart(2, '0')}`);
+        const destination = fs.joinPath(seasonDir, item.fileName);
+        if (item.filePath === destination) continue;
+        if (await fs.exists(destination)) { skipped++; continue; }
+        const created = await fs.createDir(seasonDir);
+        if (!created.success) { skipped++; continue; }
+        const result = await fs.moveFile(item.filePath, destination);
+        if (!result.success) { skipped++; continue; }
+        moved++;
+        affectedFolders.add(root.id);
+        for (const subtitle of item.subtitles) {
+          const subtitleDestination = fs.joinPath(seasonDir, subtitle.fileName);
+          if (await fs.exists(subtitleDestination)) { skipped++; continue; }
+          const subtitleMove = await fs.moveFile(subtitle.filePath, subtitleDestination);
+          if (!subtitleMove.success) skipped++;
+        }
+      }
+      for (const folderId of affectedFolders) await library.scanFolder(folderId);
+      notifyLibraryUpdated();
+      setOrganizeMessage(`${moved} قسمت منتقل شد. ${skipped} مورد به‌دلیل ابهام، نبود مسیر یا تداخل دست‌نخورده باقی ماند.`);
+    } catch (error) {
+      setOrganizeMessage(error instanceof Error ? error.message : 'سامان‌دهی پوشه‌ها انجام نشد.');
+    } finally {
+      setOrganizing(false);
+    }
+  };
 
   return <div className="mx-auto max-w-[1200px] px-4 py-6 lg:px-8 fade-in">
     <button onClick={onBack} className="mb-5 inline-flex items-center gap-2 text-sm text-text-secondary hover:text-white"><ArrowRight size={18}/> بازگشت به سریال‌ها</button>
@@ -37,9 +92,13 @@ export default function SeriesDetails({ movie, entries, onBack, onPlay }: Series
           {movie.year > 0 && <span className="inline-flex items-center gap-1"><CalendarDays size={15}/>{toPersianDigits(movie.year)}</span>}
           {movie.rating > 0 && <span className="inline-flex items-center gap-1"><Star size={15} className="text-gold-bright"/>{toPersianDigits(movie.rating.toFixed(1))}</span>}
           <span>{toPersianDigits(entries.length)} قسمت شناسایی‌شده</span>
-          <span>{toPersianDigits(seasons.length)} فصل</span>
+          <span>{toPersianDigits(seasons.filter(([s])=>s>0).length)} فصل مشخص</span>
         </div>
         <p className="mt-4 max-w-3xl text-sm leading-7 text-text-secondary">{movie.synopsis}</p>
+        <button onClick={organizeSeasons} disabled={organizing} className="mt-4 inline-flex items-center gap-2 rounded-lg border border-gold/30 bg-gold/10 px-4 py-2.5 text-sm font-semibold text-gold-bright disabled:opacity-50">
+          {organizing ? <Loader2 size={17} className="animate-spin"/> : <FolderTree size={17}/>} سامان‌دهی پوشه‌های فصل‌ها
+        </button>
+        {organizeMessage && <p className="mt-2 text-xs leading-6 text-text-secondary">{organizeMessage}</p>}
       </div>
     </div>
     <section className="mt-8">
@@ -47,7 +106,7 @@ export default function SeriesDetails({ movie, entries, onBack, onPlay }: Series
         <h2 className="text-xl font-bold text-white">قسمت‌های سریال</h2>
         <label className="flex items-center gap-2 text-sm text-text-secondary">انتخاب فصل
           <select value={selectedSeason} onChange={e => setSelectedSeason(Number(e.target.value))} className="rounded-lg border border-white/15 bg-surface-2 px-3 py-2 text-white">
-            {seasons.map(([season]) => <option key={season} value={season}>فصل {toPersianDigits(season)}</option>)}
+            {seasons.map(([season]) => <option key={season} value={season}>{season > 0 ? `فصل ${toPersianDigits(season)}` : 'فصل نامشخص'}</option>)}
           </select>
         </label>
       </div>
