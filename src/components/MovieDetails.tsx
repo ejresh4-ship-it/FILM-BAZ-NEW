@@ -119,7 +119,7 @@ export default function MovieDetails({ movie, onBack, onPlay }: MovieDetailsProp
         <div className="mt-8">
           <h2 className="text-lg font-bold text-white">خلاصه داستان</h2>
           <p className="mt-2 max-w-3xl text-sm leading-7 text-text-secondary sm:text-base">
-            {movie.synopsis}
+            {movie.synopsis && !movie.synopsis.includes('اطلاعات تکمیلی برای این عنوان ثبت نشده') ? movie.synopsis : 'خلاصه داستان این فیلم هنوز از منابع اطلاعاتی دریافت نشده است.'}
           </p>
         </div>
 
