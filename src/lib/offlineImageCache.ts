@@ -22,7 +22,7 @@ async function fetchArtwork(url: string): Promise<Response | null> {
 
 /** Download artwork into persistent Cache Storage. */
 export async function cacheOfflineImage(url?: string): Promise<boolean> {
-  if (!url || !/^https?:\\/\\//i.test(url) || !canUseCache()) return false;
+  if (!url || !/^https?:\/\//i.test(url) || !canUseCache()) return false;
   try {
     const cache = await caches.open(CACHE_NAME);
     if (await cache.match(url)) return true;
@@ -55,7 +55,7 @@ export async function resolveOfflineImage(url: string): Promise<string> {
 
 /** Warm known artwork in the background without flooding image providers. */
 export async function warmOfflineImages(urls: Array<string | undefined>): Promise<{ cached: number; skipped: number }> {
-  const unique = [...new Set(urls.filter((url): url is string => Boolean(url) && /^https?:\\/\\//i.test(url)))];
+  const unique = [...new Set(urls.filter((url): url is string => Boolean(url) && /^https?:\/\//i.test(url)))];
   let cached = 0;
   let skipped = 0;
   let cursor = 0;
