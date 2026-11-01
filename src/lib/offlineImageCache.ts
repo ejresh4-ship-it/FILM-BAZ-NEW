@@ -62,6 +62,7 @@ export async function warmOfflineImages(urls: Array<string | undefined>): Promis
   const worker = async () => {
     while (cursor < unique.length) {
       const url = unique[cursor++];
+      if (!url) continue;
       if (await cacheOfflineImage(url)) cached++;
       else skipped++;
     }
