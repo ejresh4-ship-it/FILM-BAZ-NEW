@@ -331,8 +331,13 @@ class LibraryService {
       (e) => e.isFile && isSubtitleFile(e.name, this.prefs.subtitleExtensions),
     );
 
-    // Build MediaItems
-    const newItems: MediaItem[] = [];
+    // Incremental scan: retain unchanged records (and their IDs/metadata links),
+    // update changed files in place, and add only genuinely new paths.
+    const previousByPath = new Map(
+      this.items.filter((item) => item.folderId === folderId).map((item) => [normalizePath(item.filePath), item]),
+    );
+    const scannedItems: MediaItem[] = [];
+    let addedOrChangedCount = 0;
     const subtitlesByParent: Record<string, DirEntry[]> = {};
     for (const sub of subtitleEntries) {
       const parent = fs.parentPath(sub.path);
@@ -355,8 +360,12 @@ class LibraryService {
           language: parseSubtitleLanguage(s.name),
         }));
 
-      newItems.push({
-        id: uid(),
+      const previous = previousByPath.get(normalizePath(vEntry.path));
+      const unchanged = previous && previous.fileSize === vEntry.size && previous.lastModified === vEntry.lastModified;
+      if (!unchanged) addedOrChangedCount += 1;
+      scannedItems.push({
+        ...(previous || {} as MediaItem),
+        id: previous?.id || uid(),
         folderId,
         filePath: vEntry.path,
         fileName: vEntry.name,
@@ -375,20 +384,23 @@ class LibraryService {
       });
     }
 
-    // Duplicate detection (filename + size heuristics — no auto-delete, no content hash)
-    this.markDuplicates(newItems);
+    // Keep records that are still present, preserving metadata IDs; remove missing paths.
+    // Duplicate detection runs across the complete folder inventory, not just new files.
+    const currentPathSet = new Set(scannedItems.map((item) => normalizePath(item.filePath)));
+    const otherFolderItems = this.items.filter((item) => item.folderId !== folderId);
+    const mergedFolderItems = scannedItems;
+    for (const item of mergedFolderItems) delete item.duplicateOfId;
+    this.markDuplicates([...otherFolderItems, ...mergedFolderItems]);
 
-    // Replace items for this folder
-    this.items = this.items.filter((i) => i.folderId !== folderId);
-    this.items.push(...newItems);
+    this.items = [...otherFolderItems, ...mergedFolderItems];
     folder.lastScannedAt = Date.now();
     await this.persistFolders();
     await this.persistItems();
 
     progress.status = 'completed';
-    progress.foundVideos = newItems.length;
+    progress.foundVideos = addedOrChangedCount;
     progress.foundSubtitles = subtitleEntries.length;
-    progress.duplicates = newItems.filter((i) => i.duplicateOfId).length;
+    progress.duplicates = mergedFolderItems.filter((i) => i.duplicateOfId).length;
     onProgress?.({ ...progress });
 
     this.scanCancellers.delete(folderId);
@@ -398,10 +410,10 @@ class LibraryService {
       startedAt,
       finishedAt: Date.now(),
       status: 'completed',
-      videoCount: newItems.length,
+      videoCount: addedOrChangedCount,
       subtitleCount: subtitleEntries.length,
-      duplicateCount: newItems.filter((i) => i.duplicateOfId).length,
-      needsReviewCount: newItems.filter((i) => i.identification === 'needs-review').length,
+      duplicateCount: mergedFolderItems.filter((i) => i.duplicateOfId).length,
+      needsReviewCount: mergedFolderItems.filter((i) => i.identification === 'needs-review').length,
     };
   }
 
@@ -742,6 +754,10 @@ class LibraryService {
     await this.persistLog();
     return { success: true };
   }
+}
+
+function normalizePath(path: string): string {
+  return path.replace(/\\/g, '/').replace(/\/+$/, '').toLocaleLowerCase();
 }
 
 function validateRenameName(value: string | undefined, extension: string, label: string): string {
