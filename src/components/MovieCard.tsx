@@ -9,7 +9,7 @@ interface MovieCardProps {
 }
 
 export default function MovieCard({ movie, onClick }: MovieCardProps) {
-  const [imgError, setImgError] = useState(false);\n  const [posterSrc, setPosterSrc] = useState(movie.posterUrl || '');\n\n  useEffect(() => {\n    let active = true;\n    setImgError(false);\n    setPosterSrc(movie.posterUrl || '');\n    if (movie.posterUrl) {\n      void resolveOfflineImage(movie.posterUrl).then((src) => { if (active) setPosterSrc(src); });\n    }\n    return () => { active = false; };\n  }, [movie.posterUrl]);
+  const [imgError, setImgError] = useState(false);\n  const [posterSrc, setPosterSrc] = useState(movie.posterUrl || '');\n\n  useEffect(() => {\n    let active = true;\n    setImgError(false);\n    setPosterSrc(movie.posterUrl || '');\n    if (movie.posterUrl) {\n      void resolveOfflineImage(movie.posterUrl).then((src) => { if (active) setPosterSrc(src); else if (src.startsWith('blob:')) URL.revokeObjectURL(src); });\n    }\n    return () => { active = false; };\n  }, [movie.posterUrl]);
 
   return (
     <button
