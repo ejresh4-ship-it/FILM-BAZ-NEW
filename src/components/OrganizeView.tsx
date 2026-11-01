@@ -42,6 +42,7 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
   const [offlineBusy, setOfflineBusy] = useState(false);
   const [offlineProgress, setOfflineProgress] = useState({ completed: 0, total: 0, succeeded: 0, failed: 0 });
   const [offlineFailures, setOfflineFailures] = useState<string[]>([]);
+  const [selectionMode, setSelectionMode] = useState<'all' | 'safe' | 'none'>('all');
 
   useEffect(() => {
     generate();
@@ -65,6 +66,16 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
   function handleExclude(opId: string) {
     if (!proposal) return;
     setProposal(service.toggleExclude(proposal, opId));
+  }
+
+  function selectOperations(mode: 'all' | 'safe' | 'none') {
+    if (!proposal) return;
+    const selected = proposal.operations.map((operation) => ({
+      ...operation,
+      excluded: mode === 'none' || (mode === 'safe' && (operation.destFileExists || operation.uncertain)),
+    }));
+    setProposal(service.recalcProposal({ ...proposal, operations: selected }));
+    setSelectionMode(mode);
   }
 
   function startEdit(op: OrgOperation) {
@@ -267,6 +278,18 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
                   {toPersianDigits(proposal!.uncertainCount)} نیازمند بررسی
                 </span>
               )}
+            </div>
+          </div>
+
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-surface-2 p-3">
+            <div>
+              <p className="text-sm font-semibold text-white">انتخاب گروهی عملیات</p>
+              <p className="mt-1 text-xs text-text-muted">بدون کلیک روی تک‌تک فیلم‌ها، موارد را یک‌جا انتخاب کن.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => selectOperations('all')} className={`rounded-lg px-3 py-2 text-xs font-semibold ${selectionMode === 'all' ? 'bg-gold/20 text-gold-bright' : 'bg-white/5 text-text-secondary hover:bg-white/10'}`}>انتخاب همه</button>
+              <button onClick={() => selectOperations('safe')} className={`rounded-lg px-3 py-2 text-xs font-semibold ${selectionMode === 'safe' ? 'bg-green-500/15 text-green-300' : 'bg-white/5 text-text-secondary hover:bg-white/10'}`}>فقط موارد امن</button>
+              <button onClick={() => selectOperations('none')} className={`rounded-lg px-3 py-2 text-xs font-semibold ${selectionMode === 'none' ? 'bg-white/10 text-white' : 'bg-white/5 text-text-secondary hover:bg-white/10'}`}>لغو انتخاب</button>
             </div>
           </div>
 
