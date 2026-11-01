@@ -94,7 +94,7 @@ export default function SeriesDetails({ movie, entries, onBack, onPlay }: Series
           <span>{toPersianDigits(entries.length)} قسمت شناسایی‌شده</span>
           <span>{toPersianDigits(seasons.filter(([s])=>s>0).length)} فصل مشخص</span>
         </div>
-        <p className="mt-4 max-w-3xl text-sm leading-7 text-text-secondary">{movie.synopsis}</p>
+        <p className="synopsis-text mt-4 max-w-3xl leading-7">{movie.synopsis}</p>
         <button onClick={organizeSeasons} disabled={organizing} className="mt-4 inline-flex items-center gap-2 rounded-lg border border-gold/30 bg-gold/10 px-4 py-2.5 text-sm font-semibold text-gold-bright disabled:opacity-50">
           {organizing ? <Loader2 size={17} className="animate-spin"/> : <FolderTree size={17}/>} سامان‌دهی پوشه‌های فصل‌ها
         </button>
