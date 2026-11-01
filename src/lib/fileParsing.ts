@@ -51,7 +51,7 @@ const LANG_TAG = /\b(fa|per|fas|eng|en|ar|fre|ger|spa)\b/i;
 const NOISE = new RegExp(
   String.raw`\b(1080p|1080i|720p|480p|2160p|4k|uhd|hd|web[ ._-]?dl|webrip|web|bluray|blu-ray|` +
     String.raw`brrip|bdrip|dvdrip|cam|ts|tc|hdrip|hdtv|remux|atmos|ddp|ddp5|` +
-    String.raw`x264|x265|h264|h265|hevc|aac|ac3|mp3|dts|10bit|avc|dxva|` +
+    String.raw`x264|x265|h264|h265|hevc|aac[ ._-]?vxt|aac|ac3|mp3|dts|2ch|10bit|avc|dxva|` +
     String.raw`multi|dual|double|doble|duble|dobbed|dubbed|sub|subs|subtitle|hardsub|custom|internal|proper|repack|extended|fsrsi|farsi|sanig|rib|` +
     String.raw`unrated|directors|cut|imax|lmax|korean|hdcam|film2media|hybrid|crf|cf|nfo)\b`,
   'gi',
@@ -63,7 +63,7 @@ const BRACKETED_TAG = /\[[^\]]*(?:www\.|\.com|\.net|\.org|\b(?:rarbg|yts|yify|et
 function cleanTitle(raw: string): string {
   let t = raw.replace(BRACKETED_TAG, ' ').replace(/\bSITE DOMAIN\b/gi, ' ');
   t = t.replace(SITE_OR_RELEASE_TAG, ' ');
-  t = t.replace(/(?:^|[ ._-])(?:mymovies|my[-_ ]?movies|mymoviz|yts(?:\\.mx)?|yify|rarbg|eztv|ettv|tgx|pahe|psa|ganool|galaxyrg|psarips|mkvcinemas|worldfree4u|filmyzilla|moviesmod|mkvhub)(?:$|[ ._-].*)/i, ' ');
+  t = t.replace(/(?:^|[ ._-])(?:mymovies|my[-_ ]?movies|mymoviz|yts(?:\\.mx)?|yify|rarbg|eztv|ettv|tgx|pahe|psa|ganool|galaxyrg|psarips|mkvcinemas|mkvcage|farda[-_]?dl|midia|worldfree4u|filmyzilla|moviesmod|mkvhub)(?:$|[ ._-].*)/i, ' ');
   // Remove quality tags first, so a trailing group after x265/1080p becomes separable.
   t = t.replace(NOISE, ' ');
   t = t.replace(/(?:^|[ .])-[A-Z0-9][A-Z0-9._-]{1,}$/i, ' ');
