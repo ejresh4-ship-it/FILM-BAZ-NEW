@@ -44,6 +44,10 @@ export interface PlaybackPreferences {
 export interface DesktopBridge {
   readonly isDesktop: true;
 
+  // --- Artwork download ---
+  /** Fetch a remote artwork image in Electron's main process, bypassing renderer CORS. */
+  downloadImage(url: string): Promise<string | null>;
+
   // --- Filesystem (delegated to ElectronFilesystemService) ---
   listDir(path: string): Promise<import('./filesystem').DirEntry[]>;
   scanDir(
