@@ -55,6 +55,36 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
+
+// Download remote artwork in Electron's main process. This avoids renderer CORS
+// restrictions while keeping filesystem access out of the renderer.
+ipcMain.handle('images:download', async (_evt, imageUrl: string): Promise<string | null> => {
+  try {
+    if (typeof imageUrl !== 'string' || imageUrl.length > 4096) return null;
+    const parsed = new URL(imageUrl);
+    if (!['http:', 'https:'].includes(parsed.protocol)) return null;
+    const host = parsed.hostname.toLowerCase();
+    if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')
+      || host === '::1' || host.startsWith('127.') || host.startsWith('10.')
+      || host.startsWith('192.168.') || /^172\\.(1[6-9]|2[0-9]|3[01])\\./.test(host)
+      || host === '0.0.0.0' || host === '169.254.169.254') return null;
+    const response = await fetch(parsed.toString(), {
+      headers: { 'User-Agent': 'FILM-BAZ/1.0 (artwork cache)' },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!response.ok) return null;
+    const contentType = (response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+    if (!contentType.startsWith('image/') || contentType === 'image/svg+xml') return null;
+    const declaredLength = Number(response.headers.get('content-length') || 0);
+    if (declaredLength > 12 * 1024 * 1024) return null;
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (!bytes.length || bytes.length > 12 * 1024 * 1024) return null;
+    return `data:${contentType};base64,${bytes.toString('base64')}`;
+  } catch {
+    return null;
+  }
+});
+
 // --- IPC: Filesystem operations ---
 
 ipcMain.handle('fs:listDir', async (_evt, dirPath: string): Promise<DirEntry[]> => {
