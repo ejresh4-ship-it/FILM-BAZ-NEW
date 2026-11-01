@@ -6,7 +6,7 @@ function canUseCache(): boolean {
 
 /** Download an image into the browser/Electron persistent Cache Storage without replacing the source URL. */
 export async function cacheOfflineImage(url?: string): Promise<boolean> {
-  if (!url || !/^https?:\\/\\//i.test(url) || !canUseCache()) return false;
+  if (!url || !/^https?:\/\//i.test(url) || !canUseCache()) return false;
   try {
     const cache = await caches.open(CACHE_NAME);
     if (await cache.match(url)) return true;
