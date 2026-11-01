@@ -21,8 +21,10 @@ export default function Hero({ featured, onOpenDetails, onQuickView }: HeroProps
   }, [index, featured]);
 
   useEffect(() => {
-    if (featured.length < 2) return;
-    const timer = window.setInterval(() => setIndex((currentIndex) => (currentIndex + 1) % featured.length), 8000);
+    let seconds = 8;
+    try { seconds = Number(JSON.parse(localStorage.getItem('film-baz:typography') || '{}').slideInterval ?? 8); } catch { /* use default */ }
+    if (featured.length < 2 || seconds <= 0) return;
+    const timer = window.setInterval(() => setIndex((currentIndex) => (currentIndex + 1) % featured.length), seconds * 1000);
     return () => window.clearInterval(timer);
   }, [featured.length]);
 
