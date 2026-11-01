@@ -386,7 +386,6 @@ class LibraryService {
 
     // Keep records that are still present, preserving metadata IDs; remove missing paths.
     // Duplicate detection runs across the complete folder inventory, not just new files.
-    const currentPathSet = new Set(scannedItems.map((item) => normalizePath(item.filePath)));
     const otherFolderItems = this.items.filter((item) => item.folderId !== folderId);
     const mergedFolderItems = scannedItems;
     for (const item of mergedFolderItems) delete item.duplicateOfId;
@@ -468,6 +467,13 @@ class LibraryService {
     const operations: OrgOperation[] = [];
 
     for (const item of items) {
+      // A successful prior organization is authoritative: don't propose the same
+      // already-moved file again on subsequent scans.
+      const alreadyOrganized = this.log.some((entry) =>
+        entry.success && entry.type === 'move' && normalizePath(entry.destPath) === normalizePath(item.filePath),
+      );
+      if (alreadyOrganized) continue;
+
       // Skip episodes inside a series season folder (already organized in their series)
       if (item.mediaType === 'episode' || item.mediaType === 'series') {
         // For series, check if the file is loose (parent is the library root)
