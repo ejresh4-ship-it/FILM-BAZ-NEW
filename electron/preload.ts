@@ -14,6 +14,9 @@ const scanProgressChannels = new Map<string, (scanned: number, currentPath: stri
 contextBridge.exposeInMainWorld('filmBazDesktop', {
   isDesktop: true,
 
+  // --- Artwork download ---
+  downloadImage: (url: string): Promise<string | null> => ipcRenderer.invoke('images:download', url),
+
   // --- Filesystem ---
   listDir: (p: string): Promise<DirEntry[]> => ipcRenderer.invoke('fs:listDir', p),
 
