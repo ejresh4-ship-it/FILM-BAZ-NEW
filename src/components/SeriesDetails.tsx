@@ -79,7 +79,7 @@ export default function SeriesDetails({ movie, entries, onBack, onPlay }: Series
     }
   };
 
-  return <div className="mx-auto max-w-[1200px] px-4 py-6 lg:px-8 fade-in">
+  return <div className="details-page mx-auto max-w-[1200px] px-4 py-6 lg:px-8 fade-in">
     <button onClick={onBack} className="mb-5 inline-flex items-center gap-2 text-sm text-text-secondary hover:text-white"><ArrowRight size={18}/> بازگشت به سریال‌ها</button>
     <div className="flex flex-col gap-6 rounded-2xl border border-white/10 bg-surface-2/70 p-5 sm:flex-row">
       <div className="w-36 shrink-0 overflow-hidden rounded-xl border border-white/10">
