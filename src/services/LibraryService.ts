@@ -452,6 +452,7 @@ class LibraryService {
     if (!folder) throw new Error('پوشه یافت نشد');
 
     const items = this.getItemsForFolder(folderId);
+    await getMetadataService().load();
     const operations: OrgOperation[] = [];
 
     for (const item of items) {
