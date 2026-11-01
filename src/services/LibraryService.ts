@@ -186,6 +186,25 @@ class LibraryService {
       }
     }
 
+    // Keep sidecar subtitles paired with the video when its filename changes.
+    const renamedSubtitlePaths = new Map<string, string>();
+    if (renameFile && item.subtitles.length > 0) {
+      const oldVideoBase = item.fileName.slice(0, item.fileName.lastIndexOf('.'));
+      const newVideoBase = fileName.slice(0, fileName.lastIndexOf('.'));
+      for (const subtitle of item.subtitles) {
+        const oldSubtitleBase = subtitle.fileName.slice(0, subtitle.fileName.lastIndexOf('.'));
+        const suffix = oldSubtitleBase.toLowerCase().startsWith(oldVideoBase.toLowerCase())
+          ? oldSubtitleBase.slice(oldVideoBase.length)
+          : '';
+        const subtitleName = `${newVideoBase}${suffix}.${subtitle.extension}`;
+        const movedSource = renameFolder ? subtitle.filePath.replace(sourceFolderPath, destinationFolder) : subtitle.filePath;
+        const subtitleDestination = fs.joinPath(destinationFolder, subtitleName);
+        if (subtitleDestination === movedSource || await fs.exists(subtitleDestination)) continue;
+        const subtitleMove = await fs.moveFile(movedSource, subtitleDestination);
+        if (subtitleMove.success) renamedSubtitlePaths.set(subtitle.filePath, subtitleDestination);
+      }
+    }
+
     const oldFolderPrefix = sourceFolderPath.endsWith('\\') ? sourceFolderPath : `${sourceFolderPath}\\`;
     for (const current of this.items) {
       if (renameFolder && (current.parentFolder === sourceFolderPath || current.filePath.startsWith(oldFolderPrefix))) {
@@ -193,10 +212,11 @@ class LibraryService {
         current.filePath = current.filePath === sourceItemPath
           ? destinationFile
           : current.filePath.replace(sourceFolderPath, destinationFolder);
-        current.subtitles = current.subtitles.map((subtitle) => ({
-          ...subtitle,
-          filePath: subtitle.filePath.replace(sourceFolderPath, destinationFolder),
-        }));
+        current.subtitles = current.subtitles.map((subtitle) => {
+          const movedPath = renamedSubtitlePaths.get(subtitle.filePath);
+          const nextPath = movedPath || subtitle.filePath.replace(sourceFolderPath, destinationFolder);
+          return { ...subtitle, filePath: nextPath, fileName: fs.baseName(nextPath) };
+        });
         if (current.id === itemId && renameFile) current.fileName = fileName;
       } else if (current.id === itemId && renameFile) {
         current.filePath = destinationFile;
