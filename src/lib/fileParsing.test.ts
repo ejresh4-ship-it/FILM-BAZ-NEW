@@ -99,6 +99,14 @@ describe('parseFileName', () => {
     expect(r.language).toBe('fa');
   });
 
+  it('strips MyMoviz and yts.mx branding', () => {
+    for (const suffix of ['MyMoviz', 'yts.mx']) {
+      const parsed = parseFileName(`The.Matrix.1999.1080p.${suffix}.mkv`);
+      expect(parsed.titleGuess).toBe('The Matrix');
+      expect(parsed.yearGuess).toBe(1999);
+    }
+  });
+
   it('removes punctuation noise and double spelling variants', () => {
     for (const suffix of ['double', 'doble', 'duble']) {
       const parsed = parseFileName(`The.Matrix.1999.@$#&£_${suffix}.mkv`);
