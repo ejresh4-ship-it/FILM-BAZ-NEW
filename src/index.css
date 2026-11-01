@@ -84,7 +84,7 @@
     margin: 0;
     background-color: var(--bg-base);
     color: var(--text-primary);
-    font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+    font-family: var(--app-font-family, 'Vazirmatn'), system-ui, -apple-system, sans-serif;
     font-size: var(--app-font-size);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -240,3 +240,14 @@
   color: var(--synopsis-color, #ffffff) !important;
   font-size: var(--app-font-size, 16px);
 }
+
+
+/* Independent, persisted typography scopes. */
+.home-page { font-size: var(--home-font-size, 16px); color: var(--home-text-color, inherit); }
+.home-page h1, .home-page h2, .home-page h3 { font-size: var(--heading-font-size, inherit); color: var(--heading-text-color, inherit); }
+.details-page { font-size: var(--details-font-size, 16px); color: var(--details-text-color, inherit); }
+.details-page h1, .details-page h2, .details-page h3 { font-size: var(--heading-font-size, inherit); color: var(--heading-text-color, inherit); }
+.quick-view-modal { font-size: var(--popup-font-size, 14px); color: var(--popup-text-color, inherit); }
+.quick-view-modal h1, .quick-view-modal h2, .quick-view-modal h3 { color: var(--heading-text-color, inherit); }
+.hero-slide-title { font-size: var(--slide-title-size, 52px) !important; color: var(--slide-title-color, #fff) !important; }
+.hero-slide-body { font-size: var(--slide-body-size, 16px) !important; color: var(--slide-body-color, #fff) !important; }
