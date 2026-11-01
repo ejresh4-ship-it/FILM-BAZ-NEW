@@ -108,7 +108,7 @@ describe('parseFileName', () => {
   });
 
   it('removes punctuation noise and double spelling variants', () => {
-    for (const suffix of ['double', 'doble', 'duble']) {
+    for (const suffix of ['double', 'doble', 'duble', 'dobbed', 'dubbed', 'fsrsi', 'farsi', 'sanig', 'web-rib', 'hardsub']) {
       const parsed = parseFileName(`The.Matrix.1999.@$#&£_${suffix}.mkv`);
       expect(parsed.titleGuess).toBe('The Matrix');
       expect(parsed.yearGuess).toBe(1999);
