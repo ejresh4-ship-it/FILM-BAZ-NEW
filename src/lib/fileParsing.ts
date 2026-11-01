@@ -52,7 +52,7 @@ const NOISE = new RegExp(
   String.raw`\b(1080p|1080i|720p|480p|2160p|4k|uhd|hd|web-dl|webrip|web|bluray|blu-ray|` +
     String.raw`brrip|bdrip|dvdrip|cam|ts|tc|hdrip|hdtv|remux|atmos|ddp|ddp5|` +
     String.raw`x264|x265|h264|h265|hevc|aac|ac3|mp3|dts|10bit|avc|dxva|` +
-    String.raw`multi|dual|sub|subs|subtitle|custom|internal|proper|repack|extended|` +
+    String.raw`multi|dual|double|doble|duble|sub|subs|subtitle|custom|internal|proper|repack|extended|` +
     String.raw`unrated|directors|cut|imax|hybrid|crf|cf|nfo)\b`,
   'gi',
 );
@@ -68,7 +68,7 @@ function cleanTitle(raw: string): string {
   t = t.replace(NOISE, ' ');
   t = t.replace(/(?:^|[ .])-[A-Z0-9][A-Z0-9._-]{1,}$/i, ' ');
   t = t.replace(/-(?:[A-Z][a-z0-9]+){2,}|-[A-Z0-9]{3,}$/, ' ');
-  t = t.replace(/[._]/g, ' ');
+  // Strip punctuation/symbol noise often appended by download sites, while keeping letters and digits.\n  t = t.replace(/[^\\p{L}\\p{N}\\s.-]/gu, ' ');\n  t = t.replace(/[._-]/g, ' ');
   t = t.replace(/\s+/g, ' ').trim();
   // Title-case
   if (t) t = t.charAt(0).toUpperCase() + t.slice(1);
