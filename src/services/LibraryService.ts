@@ -18,6 +18,7 @@ import type {
 import type { DirEntry } from '@/services/filesystem';
 import { getFilesystemService } from '@/services/filesystemFactory';
 import { idbGet, idbSet } from '@/services/idbStore';
+import { getMetadataService } from '@/services/metadata/MetadataService';
 import {
   isVideoFile,
   isSubtitleFile,
@@ -476,10 +477,18 @@ class LibraryService {
 
       if (isDedicated) continue;
 
-      // Propose a new folder
-      const folderName = buildFolderName(item.titleGuess || item.fileName, item.yearGuess);
+      // Prefer confirmed provider metadata; fall back to the conservative filename parser.
+      const metadata = getMetadataService().getMetadataForItem(item.id);
+      const canonicalTitle = metadata?.title?.trim() || item.titleGuess || item.fileName;
+      const canonicalYear = metadata?.year || item.yearGuess;
+      const folderName = buildFolderName(canonicalTitle, canonicalYear);
+      const extension = item.extension ? `.${item.extension}` : '';
+      const canonicalBase = item.mediaType === 'episode' && item.seasonGuess && item.episodeGuess
+        ? `${canonicalTitle} - S${String(item.seasonGuess).padStart(2, '0')}E${String(item.episodeGuess).padStart(2, '0')}`
+        : folderName;
+      const proposedFileName = `${canonicalBase}${extension}`;
       const destFolderPath = fs.joinPath(folder.path, folderName);
-      const destFilePath = fs.joinPath(destFolderPath, item.fileName);
+      const destFilePath = fs.joinPath(destFolderPath, proposedFileName);
 
       const destFolderExists = await fs.exists(destFolderPath);
       const destFileExists = await fs.exists(destFilePath);
