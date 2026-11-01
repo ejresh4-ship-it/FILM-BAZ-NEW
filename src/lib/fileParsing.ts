@@ -68,7 +68,7 @@ function cleanTitle(raw: string): string {
   t = t.replace(NOISE, ' ');
   t = t.replace(/(?:^|[ .])-[A-Z0-9][A-Z0-9._-]{1,}$/i, ' ');
   t = t.replace(/-(?:[A-Z][a-z0-9]+){2,}|-[A-Z0-9]{3,}$/, ' ');
-  // Strip punctuation/symbol noise often appended by download sites, while keeping letters and digits.\n  t = t.replace(/[^\\p{L}\\p{N}\\s.-]/gu, ' ');\n  t = t.replace(/[._-]/g, ' ');
+  t = t.replace(/[^\p{L}\p{N}\s.-]/gu, ' ');
   t = t.replace(/\s+/g, ' ').trim();
   // Title-case
   if (t) t = t.charAt(0).toUpperCase() + t.slice(1);
