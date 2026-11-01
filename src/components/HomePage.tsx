@@ -23,7 +23,7 @@ export default function HomePage({ entries, featured, recentlyPlayed, onOpenDeta
     const genreRows = (genre: string) => sorted
       .filter((entry) => entry.movie.genres.some((value) => value.toLowerCase() === genre))
       .map((entry) => entry.movie);
-    const assigned = new Set([...genreRows('action'), ...genreRows('crime'), ...genreRows('comedy')].map((movie) => movie.id));
+    const assigned = new Set([...genreRows('اکشن'), ...genreRows('جنایی'), ...genreRows('کمدی')].map((movie) => movie.id));
     return [
       sorted.map((entry) => entry.movie),
       genreRows('action'),
