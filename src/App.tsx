@@ -37,6 +37,9 @@ export default function App() {
   const [playLoading, setPlayLoading] = useState(false);
   const [playingTitle, setPlayingTitle] = useState('');
   const [libraryEntries, setLibraryEntries] = useState<LibraryMovieEntry[]>([]);
+  const [recentPlayedIds, setRecentPlayedIds] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('film-baz:recent-played') || '[]') as string[]; } catch { return []; }
+  });
   const [enrichmentLoadingIds, setEnrichmentLoadingIds] = useState<Set<string>>(new Set());
   const enrichmentInFlight = useRef(new Set<string>());
   const enrichmentAttempted = useRef(new Set<string>());
@@ -140,6 +143,24 @@ export default function App() {
   const openDetails = useCallback((id: string) => {
     setQuickViewId(null);
     setDetailsId(id);
+    const library = getLibraryService();
+    const metadataService = getMetadataService();
+    const item = library.getItems().find((entry) => entry.id === id);
+    if (!item || enrichmentInFlight.current.has(id) || enrichmentAttempted.current.has(id)) return;
+    const metadata = metadataService.getMetadataForItem(id);
+    if (metadata?.manuallyCorrected || (metadata?.overview && metadata.cast.length > 0)) return;
+    enrichmentAttempted.current.add(id);
+    enrichmentInFlight.current.add(id);
+    setEnrichmentLoadingIds((current) => new Set(current).add(id));
+    void metadataService.enrichItem(item).then(() => {
+      setLibraryEntries(buildLibraryMovieEntries(library.getItems(), metadataService));
+      const urls = metadataService.getCachedMetadata().flatMap((entry) => [entry.posterUrl, entry.backdropUrl, ...(entry.cast || []).map((person) => person.photoUrl)]);
+      void warmOfflineImages(urls);
+    }).catch(() => { /* Keep the local details visible when providers are unavailable. */ })
+      .finally(() => {
+        enrichmentInFlight.current.delete(id);
+        setEnrichmentLoadingIds((current) => { const next = new Set(current); next.delete(id); return next; });
+      });
   }, []);
 
   const handlePlay = useCallback((id: string) => {
@@ -153,6 +174,13 @@ export default function App() {
       .then((outcome) => {
         setPlayOutcome(outcome);
         setPlayLoading(false);
+        if (outcome.success) {
+          setRecentPlayedIds((current) => {
+            const next = [id, ...current.filter((playedId) => playedId !== id)].slice(0, 20);
+            localStorage.setItem('film-baz:recent-played', JSON.stringify(next));
+            return next;
+          });
+        }
       })
       .catch(() => {
         setPlayOutcome({ success: false, browserMode: false, error: 'خطای غیرمنتظره در پخش.' });
@@ -185,11 +213,13 @@ export default function App() {
               window.scrollTo({ top: 0 });
             }}
             onPlay={handlePlay}
+            isEnriching={enrichmentLoadingIds.has(detailsId || '')}
           />
         ) : activeView === 'home' ? (
           <HomePage
             entries={visibleEntries}
             featured={featured}
+            recentlyPlayed={recentPlayedIds.map((id) => getMovieById(libraryMovies, id)).filter((movie): movie is Movie => Boolean(movie))}
             onOpenDetails={openDetails}
             onQuickView={openQuickView}
           />
