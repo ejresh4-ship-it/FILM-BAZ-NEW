@@ -22,7 +22,8 @@ import { subscribeToLibraryUpdates } from '@/services/libraryEvents';
 import { getPlaybackService, type PlayOutcome } from '@/services/playback/PlaybackService';
 import type { Movie } from '@/types/movie';
 import type { MediaItem } from '@/types/media-library';
-import type { MovieMetadata } from '@/types/metadata';\nimport { warmOfflineImages } from '@/lib/offlineImageCache';
+import type { MovieMetadata } from '@/types/metadata';
+import { warmOfflineImages } from '@/lib/offlineImageCache';
 
 export default function App() {
   const [activeView, setActiveView] = useState<NavView>('home');
@@ -50,7 +51,12 @@ export default function App() {
     const library = getLibraryService();
     const metadata = getMetadataService();
     await Promise.all([library.load(), metadata.load()]);
-    setLibraryEntries(buildLibraryMovieEntries(library.getItems(), metadata));\n    // Automatically download posters, backdrops and cast photos in the background.\n    const imageUrls = metadata.getCachedMetadata().flatMap((entry) => [\n      entry.posterUrl, entry.backdropUrl, ...(entry.cast || []).map((person) => person.photoUrl),\n    ]);\n    void warmOfflineImages(imageUrls);
+    setLibraryEntries(buildLibraryMovieEntries(library.getItems(), metadata));
+    // Automatically download posters, backdrops and cast photos in the background.
+    const imageUrls = metadata.getCachedMetadata().flatMap((entry) => [
+      entry.posterUrl, entry.backdropUrl, ...(entry.cast || []).map((person) => person.photoUrl),
+    ]);
+    void warmOfflineImages(imageUrls);
   }, []);
 
   useEffect(() => {
