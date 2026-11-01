@@ -221,6 +221,10 @@ class LibraryService {
       } else if (current.id === itemId && renameFile) {
         current.filePath = destinationFile;
         current.fileName = fileName;
+        current.subtitles = current.subtitles.map((subtitle) => {
+          const nextPath = renamedSubtitlePaths.get(subtitle.filePath) || subtitle.filePath;
+          return { ...subtitle, filePath: nextPath, fileName: fs.baseName(nextPath) };
+        });
       }
     }
 
