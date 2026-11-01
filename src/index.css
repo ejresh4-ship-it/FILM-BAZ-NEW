@@ -18,6 +18,8 @@
     --accent-gold-bright: #f0c75e;
     --accent-orange: #e8853a;
     --accent-orange-deep: #c96a26;
+    --app-font-size: 16px;
+    --synopsis-color: #ffffff;
   }
 
   :root[data-theme='gold'] {
@@ -83,6 +85,7 @@
     background-color: var(--bg-base);
     color: var(--text-primary);
     font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+    font-size: var(--app-font-size);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     line-height: 1.6;
@@ -229,4 +232,11 @@
 
 :root[data-theme='crimson'] ::-webkit-scrollbar-thumb:hover {
   background: #812038;
+}
+
+
+/* User-configurable synopsis readability and typography. */
+.synopsis-text {
+  color: var(--synopsis-color, #ffffff) !important;
+  font-size: var(--app-font-size, 16px);
 }
