@@ -111,6 +111,10 @@ export default function App() {
     void metadataService.enrichItem(item)
       .then(() => {
         setLibraryEntries(buildLibraryMovieEntries(library.getItems(), metadataService));
+        const imageUrls = metadataService.getCachedMetadata().flatMap((entry) => [
+          entry.posterUrl, entry.backdropUrl, ...(entry.cast || []).map((person) => person.photoUrl),
+        ]);
+        void warmOfflineImages(imageUrls);
       })
       .catch(() => {
         // The quick view remains usable with cached/local information if providers fail.
