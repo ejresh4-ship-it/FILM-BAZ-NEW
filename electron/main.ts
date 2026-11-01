@@ -66,7 +66,7 @@ ipcMain.handle('images:download', async (_evt, imageUrl: string): Promise<string
     const host = parsed.hostname.toLowerCase();
     if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')
       || host === '::1' || host.startsWith('127.') || host.startsWith('10.')
-      || host.startsWith('192.168.') || /^172\\.(1[6-9]|2[0-9]|3[01])\\./.test(host)
+      || host.startsWith('192.168.') || /^172\.(1[6-9]|2[0-9]|3[01])\./.test(host)
       || host === '0.0.0.0' || host === '169.254.169.254') return null;
     const response = await fetch(parsed.toString(), {
       headers: { 'User-Agent': 'FILM-BAZ/1.0 (artwork cache)' },
