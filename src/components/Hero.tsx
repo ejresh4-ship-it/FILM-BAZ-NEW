@@ -89,14 +89,14 @@ export default function Hero({ featured, onOpenDetails, onQuickView }: HeroProps
               </div>
             )}
 
-            <h1 className="text-4xl font-black leading-[1.12] text-white drop-shadow-[0_3px_12px_rgba(0,0,0,0.95)] [text-shadow:0_2px_3px_rgba(0,0,0,0.95),0_0_18px_rgba(0,0,0,0.65)] mix-blend-difference sm:text-5xl lg:text-6xl xl:text-7xl">
+            <h1 className="hero-slide-title text-4xl font-black leading-[1.12] text-white drop-shadow-[0_3px_12px_rgba(0,0,0,0.95)] [text-shadow:0_2px_3px_rgba(0,0,0,0.95),0_0_18px_rgba(0,0,0,0.65)] mix-blend-difference sm:text-5xl lg:text-6xl xl:text-7xl">
               {current.title}
             </h1>
             <p className="mt-2 text-lg font-extrabold text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)] [text-shadow:0_2px_4px_rgba(0,0,0,0.95)] mix-blend-difference sm:text-xl lg:text-2xl">
               {current.englishTitle}
             </p>
 
-            <p className="mt-5 max-w-xl rounded-lg bg-black/25 px-3 py-2 text-sm font-semibold leading-7 text-white drop-shadow-lg backdrop-blur-[2px] [text-shadow:0_1px_4px_rgba(0,0,0,0.95)] sm:text-base line-clamp-3">
+            <p className="hero-slide-body mt-5 max-w-xl rounded-lg bg-black/25 px-3 py-2 text-sm font-semibold leading-7 text-white drop-shadow-lg backdrop-blur-[2px] [text-shadow:0_1px_4px_rgba(0,0,0,0.95)] sm:text-base line-clamp-3">
               {current.synopsis}
             </p>
 
