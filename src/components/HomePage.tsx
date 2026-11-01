@@ -8,11 +8,12 @@ import type { Movie } from '@/types/movie';
 interface HomePageProps {
   entries: LibraryMovieEntry[];
   featured: Movie[];
+  recentlyPlayed: Movie[];
   onOpenDetails: (id: string) => void;
   onQuickView: (id: string) => void;
 }
 
-export default function HomePage({ entries, featured, onOpenDetails, onQuickView }: HomePageProps) {
+export default function HomePage({ entries, featured, recentlyPlayed, onOpenDetails, onQuickView }: HomePageProps) {
   const [newest, action, crime, comedy, other] = useMemo(() => {
     const sorted = [...entries].sort((a, b) => {
       const aTime = a.item.lastModified || a.metadata?.cachedAt || 0;
@@ -45,7 +46,7 @@ export default function HomePage({ entries, featured, onOpenDetails, onQuickView
       <Hero featured={featured} onOpenDetails={onOpenDetails} onQuickView={onQuickView} />
       <div className="space-y-10 py-10">
         <MovieRow title="تازه‌های آرشیو" movies={newest} onOpenMovie={onQuickView} />
-        <ContinueWatching movies={[]} onOpenMovie={onQuickView} />
+        <ContinueWatching movies={recentlyPlayed} onOpenMovie={onQuickView} />
         <MovieRow title="اکشن" movies={action} onOpenMovie={onQuickView} />
         <MovieRow title="جنایی" movies={crime} onOpenMovie={onQuickView} />
         <MovieRow title="کمدی" movies={comedy} onOpenMovie={onQuickView} />
