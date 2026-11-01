@@ -42,7 +42,7 @@ export default function HomePage({ entries, featured, recentlyPlayed, onOpenDeta
   }, [entries]);
 
   return (
-    <div className="fade-in">
+    <div className="home-page fade-in">
       {entries.length === 0 && (
         <div className="mx-auto max-w-[1400px] px-4 pt-6 lg:px-8">
           <div className="rounded-xl border border-dashed border-white/10 bg-surface-2 p-5 text-center">
