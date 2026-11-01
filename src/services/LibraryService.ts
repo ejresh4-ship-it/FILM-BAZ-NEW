@@ -630,39 +630,36 @@ class LibraryService {
         proposalId: proposal.id,
       });
 
-      // Move related subtitles alongside
+      // Move and rename related subtitles to match the new video basename.
+      const item = this.items.find((i) => i.id === op.itemId);
+      const sourceVideoName = fs.baseName(op.sourcePath);
+      const sourceVideoBase = sourceVideoName.slice(0, sourceVideoName.lastIndexOf('.'));
+      const destinationVideoName = fs.baseName(op.destFilePath);
+      const destinationVideoBase = destinationVideoName.slice(0, destinationVideoName.lastIndexOf('.'));
       for (const sub of op.relatedSubtitles) {
-        const subDestPath = fs.joinPath(op.destFolderPath, sub.fileName);
+        const sourceSubtitleName = fs.baseName(sub.filePath);
+        const sourceSubtitleBase = sourceSubtitleName.slice(0, sourceSubtitleName.lastIndexOf('.'));
+        const suffix = sourceSubtitleBase.toLowerCase().startsWith(sourceVideoBase.toLowerCase())
+          ? sourceSubtitleBase.slice(sourceVideoBase.length)
+          : '';
+        const subDestName = `${destinationVideoBase}${suffix}.${sub.extension}`;
+        const subDestPath = fs.joinPath(op.destFolderPath, subDestName);
         if (await fs.exists(subDestPath)) {
-          this.addLog({
-            id: uid(),
-            timestamp: Date.now(),
-            type: 'move',
-            sourcePath: sub.filePath,
-            destPath: subDestPath,
-            success: false,
-            error: 'زیرنویس مقصد از قبل وجود دارد',
-            proposalId: proposal.id,
-          });
+          this.addLog({ id: uid(), timestamp: Date.now(), type: 'move', sourcePath: sub.filePath, destPath: subDestPath, success: false, error: 'زیرنویس مقصد از قبل وجود دارد', proposalId: proposal.id });
           continue;
         }
         const subResult = await fs.moveFile(sub.filePath, subDestPath);
-        this.addLog({
-          id: uid(),
-          timestamp: Date.now(),
-          type: 'move',
-          sourcePath: sub.filePath,
-          destPath: subDestPath,
-          success: subResult.success,
-          error: subResult.error,
-          proposalId: proposal.id,
-        });
+        this.addLog({ id: uid(), timestamp: Date.now(), type: 'move', sourcePath: sub.filePath, destPath: subDestPath, success: subResult.success, error: subResult.error, proposalId: proposal.id });
+        if (subResult.success && item) {
+          const tracked = item.subtitles.find((entry) => entry.filePath === sub.filePath);
+          if (tracked) { tracked.filePath = subDestPath; tracked.fileName = subDestName; }
+        }
       }
 
       // Update the in-memory item to reflect the new path
-      const item = this.items.find((i) => i.id === op.itemId);
       if (item) {
         item.filePath = op.destFilePath;
+        item.fileName = destinationVideoName;
         item.parentFolder = op.destFolderPath;
       }
     }
