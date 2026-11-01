@@ -39,6 +39,9 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
   const [metadataBusy, setMetadataBusy] = useState(false);
   const [metadataProgress, setMetadataProgress] = useState({ completed: 0, total: 0, current: '', succeeded: 0, failed: 0 });
   const [metadataFailures, setMetadataFailures] = useState<Array<{ fileName: string; reason: string }>>([]);
+  const [offlineBusy, setOfflineBusy] = useState(false);
+  const [offlineProgress, setOfflineProgress] = useState({ completed: 0, total: 0, succeeded: 0, failed: 0 });
+  const [offlineFailures, setOfflineFailures] = useState<string[]>([]);
 
   useEffect(() => {
     generate();
@@ -121,6 +124,57 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
     } finally {
       setExecuting(false);
     }
+  }
+
+  async function saveOrganizedFilesOffline() {
+    if (!execResult || offlineBusy) return;
+    const metadataService = getMetadataService();
+    const items = service.getItems();
+    const completed = execResult.succeeded;
+    if (completed.length === 0) return;
+    if (!window.confirm(`اطلاعات و تصاویر ${toPersianDigits(completed.length)} فایل سازمان‌دهی‌شده کنار ویدئوها ذخیره شود؟ فایل‌های جانبی موجود بازنویسی نمی‌شوند.`)) return;
+    setOfflineBusy(true);
+    setOfflineFailures([]);
+    setOfflineProgress({ completed: 0, total: completed.length, succeeded: 0, failed: 0 });
+    let succeeded = 0;
+    let failed = 0;
+    const failures: string[] = [];
+    for (let index = 0; index < completed.length; index += 1) {
+      const op = completed[index];
+      const item = items.find((entry) => entry.id === op.itemId);
+      const metadata = metadataService.getMetadataForItem(op.itemId);
+      try {
+        if (!item || !metadata) throw new Error('اطلاعات متادیتا برای این فایل موجود نیست');
+        const videoName = fs.baseName(item.filePath);
+        const base = videoName.slice(0, videoName.lastIndexOf('.')) || videoName;
+        const jsonPath = fs.joinPath(item.parentFolder, `${base}.film-baz.json`);
+        if (await fs.exists(jsonPath)) throw new Error('فایل اطلاعات جانبی از قبل وجود دارد');
+        const savedImages: string[] = [];
+        const images = [
+          { label: 'poster', url: metadata.posterUrl },
+          { label: 'backdrop', url: metadata.backdropUrl },
+          ...metadata.cast.map((person, personIndex) => ({ label: `cast-${String(personIndex + 1).padStart(2, '0')}`, url: person.photoUrl })),
+        ].filter((entry): entry is { label: string; url: string } => Boolean(entry.url));
+        for (const image of images) {
+          const extensionMatch = image.url.match(/\.(jpe?g|png|webp)(?:[?#]|$)/i);
+          const extension = extensionMatch?.[1]?.toLowerCase() || 'jpg';
+          const imagePath = fs.joinPath(item.parentFolder, `${base}.${image.label}.${extension}`);
+          if (await fs.exists(imagePath)) continue;
+          const result = await fs.downloadFile(image.url, imagePath);
+          if (result.success) savedImages.push(fs.baseName(imagePath));
+          else failures.push(`${videoName}: دانلود تصویر ${image.label} ناموفق بود`);
+        }
+        const sidecar = { ...metadata, offlineAssets: savedImages, exportedAt: new Date().toISOString() };
+        await fs.writeTextFile(jsonPath, JSON.stringify(sidecar, null, 2));
+        succeeded += 1;
+      } catch (error) {
+        failed += 1;
+        failures.push(`${fs.baseName(op.destFilePath)}: ${error instanceof Error ? error.message : 'خطای ذخیره‌سازی'}`);
+      }
+      setOfflineProgress({ completed: index + 1, total: completed.length, succeeded, failed });
+      setOfflineFailures([...failures]);
+    }
+    setOfflineBusy(false);
   }
 
   const activeOps = useMemo(() => (proposal ? proposal.operations.filter((o) => !o.excluded) : []), [proposal]);
@@ -254,6 +308,15 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
                   ))}
                 </div>
               )}
+              <div className="mt-4 rounded-lg border border-gold/20 bg-gold/5 p-3">
+                <p className="text-sm font-semibold text-white">ذخیره نسخه آفلاین فایل‌های سازمان‌دهی‌شده</p>
+                <p className="mt-1 text-xs leading-6 text-text-secondary">اطلاعات فیلم و پوستر، تصویر پس‌زمینه و تصاویر بازیگران در کنار فایل ویدئویی ذخیره می‌شوند. فایل‌های موجود بازنویسی نمی‌شوند.</p>
+                <button onClick={() => void saveOrganizedFilesOffline()} disabled={offlineBusy || execResult.succeeded.length === 0} className="btn-primary mt-3 text-sm disabled:opacity-50">
+                  {offlineBusy ? <><Loader2 size={16} className="animate-spin" /> در حال ذخیره…</> : 'ذخیره فایل‌های موفق به‌صورت آفلاین'}
+                </button>
+                {offlineProgress.total > 0 && <p className="mt-2 text-xs text-text-secondary">پیشرفت: {toPersianDigits(offlineProgress.completed)} از {toPersianDigits(offlineProgress.total)} · {toPersianDigits(offlineProgress.succeeded)} موفق · {toPersianDigits(offlineProgress.failed)} ناموفق</p>}
+                {offlineFailures.length > 0 && <div className="mt-2 max-h-28 space-y-1 overflow-y-auto">{offlineFailures.map((failure, index) => <p key={index} className="text-xs text-amber-300">{failure}</p>)}</div>}
+              </div>
               <button
                 onClick={onViewLog}
                 className="mt-3 text-xs text-gold-bright hover:underline"
