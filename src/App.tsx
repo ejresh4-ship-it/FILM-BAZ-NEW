@@ -3,6 +3,7 @@ import Header, { type NavView } from '@/components/Header';
 import HomePage from '@/components/HomePage';
 import QuickViewModal from '@/components/QuickViewModal';
 import MovieDetails from '@/components/MovieDetails';
+import SeriesDetails from '@/components/SeriesDetails';
 import SettingsView from '@/components/SettingsView';
 import GenresView from '@/components/GenresView';
 import CategoryView from '@/components/CategoryView';
@@ -57,11 +58,32 @@ export default function App() {
     return subscribeToLibraryUpdates(() => { void loadLibrary(); });
   }, [loadLibrary]);
 
+  const seriesGroups = useMemo(() => {
+    const groups = new Map<string, LibraryMovieEntry[]>();
+    for (const entry of libraryEntries) {
+      if (entry.movie.category !== 'series') continue;
+      const key = (entry.item.titleGuess || entry.movie.englishTitle || entry.movie.title)
+        .toLocaleLowerCase().replace(/[._-]+/g, ' ').replace(/\\s+/g, ' ').trim();
+      groups.set(key, [...(groups.get(key) ?? []), entry]);
+    }
+    return [...groups.values()].map((group) => [...group].sort((a, b) =>
+      Number(Boolean(b.metadata?.posterUrl)) - Number(Boolean(a.metadata?.posterUrl))
+    ));
+  }, [libraryEntries]);
+  const visibleEntries = useMemo(() => {
+    const seriesRepresentatives = seriesGroups.map((group) => group[0]);
+    const seriesIds = new Set(libraryEntries.filter((entry) => entry.movie.category === 'series').map((entry) => entry.item.id));
+    return [...libraryEntries.filter((entry) => !seriesIds.has(entry.item.id)), ...seriesRepresentatives];
+  }, [libraryEntries, seriesGroups]);
   const libraryMovies = useMemo(() => libraryEntries.map((entry) => entry.movie), [libraryEntries]);
+  const visibleMovies = useMemo(() => visibleEntries.map((entry) => entry.movie), [visibleEntries]);
   const featured = useMemo<Movie[]>(() => pickRandom(
-    libraryEntries.filter((entry) => Boolean(entry.metadata?.posterUrl || entry.metadata?.backdropUrl)).map((entry) => entry.movie),
+    visibleEntries.filter((entry) => Boolean(entry.metadata?.posterUrl || entry.metadata?.backdropUrl)).map((entry) => entry.movie),
     3,
-  ), [libraryEntries]);
+  ), [visibleEntries]);
+  const activeSeriesEntries = detailsId
+    ? seriesGroups.find((group) => group.some((entry) => entry.item.id === detailsId)) ?? []
+    : [];
 
   const quickViewMovie = quickViewId ? getMovieById(libraryMovies, quickViewId) : null;
   const detailsMovie = detailsId ? getMovieById(libraryMovies, detailsId) : null;
@@ -143,7 +165,9 @@ export default function App() {
       <Header activeView={activeView} onNavigate={navigate} onOpenMovie={openQuickView} movies={libraryMovies} />
 
       <main>
-        {detailsMovie ? (
+        {detailsMovie?.category === 'series' ? (
+          <SeriesDetails movie={detailsMovie} entries={activeSeriesEntries} onBack={() => setDetailsId(null)} onPlay={handlePlay} />
+        ) : detailsMovie ? (
           <MovieDetails
             movie={detailsMovie}
             onBack={() => {
@@ -154,7 +178,7 @@ export default function App() {
           />
         ) : activeView === 'home' ? (
           <HomePage
-            entries={libraryEntries}
+            entries={visibleEntries}
             featured={featured}
             onOpenDetails={openDetails}
             onQuickView={openQuickView}
@@ -172,8 +196,8 @@ export default function App() {
             category="series"
             title="سریال‌ها"
             subtitle="مجموعه سریال‌های کتابخانه شما"
-            onOpenMovie={openQuickView}
-            movies={libraryMovies}
+            onOpenMovie={openDetails}
+            movies={visibleMovies}
           />
         ) : activeView === 'kids' ? (
           <CategoryView
