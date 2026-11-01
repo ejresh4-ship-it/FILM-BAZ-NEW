@@ -77,6 +77,11 @@ export default function SettingsView({ onBack, onNavigateLibrary }: SettingsView
   const [activeSection, setActiveSection] = useState<SectionId>('appearance');
   const [fontScale, setFontScale] = useState(() => localStorage.getItem('film-baz:font-scale') || '16');
   const [synopsisColor, setSynopsisColor] = useState(() => localStorage.getItem('film-baz:synopsis-color') || '#ffffff');
+  const [typography, setTypography] = useState(() => {
+    try { return { font: 'Vazirmatn', home: '16', headings: '30', details: '16', popup: '14', slideTitle: '52', slideBody: '16', slideInterval: '8', homeColor: '#f4f1ea', headingColor: '#ffffff', detailColor: '#f4f1ea', popupColor: '#f4f1ea', slideTitleColor: '#ffffff', slideBodyColor: '#ffffff', ...(JSON.parse(localStorage.getItem('film-baz:typography') || '{}')) }; }
+    catch { return { font: 'Vazirmatn', home: '16', headings: '30', details: '16', popup: '14', slideTitle: '52', slideBody: '16', slideInterval: '8', homeColor: '#f4f1ea', headingColor: '#ffffff', detailColor: '#f4f1ea', popupColor: '#f4f1ea', slideTitleColor: '#ffffff', slideBodyColor: '#ffffff' }; }
+  });
+  const setType = (key: string, value: string) => setTypography((current: Record<string, string>) => ({ ...current, [key]: value }));
   const [theme, setTheme] = useState<'dark' | 'gold' | 'neon' | 'crimson'>(() => {
     const saved = localStorage.getItem('film-baz:theme');
     return saved === 'gold' || saved === 'neon' || saved === 'crimson' ? saved : 'dark';
@@ -166,6 +171,16 @@ export default function SettingsView({ onBack, onNavigateLibrary }: SettingsView
                     />
                   </div>
                 </div>
+                <div className="mt-5 grid gap-4 border-t border-white/5 pt-5 sm:grid-cols-2">
+                  <label className="block sm:col-span-2"><span className="mb-2 block text-sm font-medium text-text-secondary">خانواده فونت برنامه</span><select value={typography.font} onChange={e=>setType('font',e.target.value)} className="w-full rounded-lg border border-white/15 bg-base px-3 py-2.5 text-white"><option>Vazirmatn</option><option>Noto Sans Arabic</option><option>Cairo</option><option>Tahoma</option><option>Arial</option></select></label>
+                  <StyleControl label="اندازه متن صفحه اصلی" value={typography.home} onChange={v=>setType('home',v)} color={typography.homeColor} onColor={v=>setType('homeColor',v)} />
+                  <StyleControl label="اندازه تیترها" value={typography.headings} onChange={v=>setType('headings',v)} color={typography.headingColor} onColor={v=>setType('headingColor',v)} />
+                  <StyleControl label="متن صفحات جزئیات" value={typography.details} onChange={v=>setType('details',v)} color={typography.detailColor} onColor={v=>setType('detailColor',v)} />
+                  <StyleControl label="متن پاپ‌آپ‌ها" value={typography.popup} onChange={v=>setType('popup',v)} color={typography.popupColor} onColor={v=>setType('popupColor',v)} />
+                  <StyleControl label="عنوان اسلایدها" value={typography.slideTitle} onChange={v=>setType('slideTitle',v)} color={typography.slideTitleColor} onColor={v=>setType('slideTitleColor',v)} />
+                  <StyleControl label="توضیحات اسلایدها" value={typography.slideBody} onChange={v=>setType('slideBody',v)} color={typography.slideBodyColor} onColor={v=>setType('slideBodyColor',v)} />
+                  <label className="block sm:col-span-2"><span className="mb-2 block text-sm font-medium text-text-secondary">سرعت تعویض اسلاید (ثانیه)</span><select value={typography.slideInterval} onChange={e=>setType('slideInterval',e.target.value)} className="w-full rounded-lg border border-white/15 bg-base px-3 py-2.5 text-white"><option value="4">۴ ثانیه</option><option value="6">۶ ثانیه</option><option value="8">۸ ثانیه</option><option value="10">۱۰ ثانیه</option><option value="15">۱۵ ثانیه</option><option value="0">فقط دستی</option></select></label>
+                </div>
                 <div className="mt-5 grid gap-5 border-t border-white/5 pt-5 sm:grid-cols-2">
                   <label className="block">
                     <span className="mb-2 block text-sm font-medium text-text-secondary">اندازه متن برنامه</span>
@@ -251,6 +266,10 @@ export default function SettingsView({ onBack, onNavigateLibrary }: SettingsView
       </div>
     </div>
   );
+}
+
+function StyleControl({label,value,onChange,color,onColor}:{label:string;value:string;onChange:(v:string)=>void;color:string;onColor:(v:string)=>void}) {
+  return <div className="grid grid-cols-2 gap-2"><label className="block"><span className="mb-2 block text-sm font-medium text-text-secondary">{label} (px)</span><select value={value} onChange={e=>onChange(e.target.value)} className="w-full rounded-lg border border-white/15 bg-base px-2 py-2.5 text-white">{['12','14','16','18','20','24','28','32','36','44','52','60','68'].map(v=><option key={v} value={v}>{v}</option>)}</select></label><label className="block"><span className="mb-2 block text-sm font-medium text-text-secondary">رنگ</span><input type="color" value={color} onChange={e=>onColor(e.target.value)} className="h-[42px] w-full cursor-pointer rounded-lg border border-white/15 bg-base p-1"/></label></div>;
 }
 
 function SettingsPanel({
