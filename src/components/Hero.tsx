@@ -18,7 +18,13 @@ export default function Hero({ featured, onOpenDetails, onQuickView }: HeroProps
   useEffect(() => {
     setBackdropError(false);
     setPosterError(false);
-  }, [index]);
+  }, [index, featured]);
+
+  useEffect(() => {
+    if (featured.length < 2) return;
+    const timer = window.setInterval(() => setIndex((currentIndex) => (currentIndex + 1) % featured.length), 8000);
+    return () => window.clearInterval(timer);
+  }, [featured.length]);
 
   if (featured.length === 0) return null;
 
