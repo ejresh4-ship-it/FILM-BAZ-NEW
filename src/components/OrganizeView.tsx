@@ -19,7 +19,6 @@ import { toPersianDigits } from '@/lib/movieUtils';
 import { getFilesystemService } from '@/services/filesystemFactory';
 import { getMetadataService } from '@/services/metadata/MetadataService';
 import { notifyLibraryUpdated } from '@/services/libraryEvents';
-import { buildFolderName } from '@/lib/fileParsing';
 
 interface OrganizeViewProps {
   folderId: string;
@@ -164,6 +163,18 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
 
     try {
       await metadataService.load();
+      // Rename only items whose organization completed successfully. The service
+      // preflights and rolls back each video/subtitle group if any move fails.
+      const renameResult = await service.renameOrganizedItemsBatch(
+        completed.map((operation) => operation.itemId),
+      );
+      namesSynced = renameResult.succeeded.length;
+      nameFailures = renameResult.failed.length;
+      for (const failure of renameResult.failed) {
+        const failedItem = service.getItems().find((entry) => entry.id === failure.itemId);
+        failures.push((failedItem?.fileName || failure.itemId) + ': ' + failure.error);
+      }
+
       for (let index = 0; index < completed.length; index += 1) {
         const operation = completed[index];
         let item = service.getItems().find((entry) => entry.id === operation.itemId);
@@ -174,35 +185,8 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
           offlineFailures += 1;
           failures.push(fs.baseName(operation.destFilePath) + ': فایل در کتابخانه پیدا نشد');
         } else {
-          // Keep naming consistent with the title/year used by the organizer.
-          // Episodes retain their season/episode identifier in the filename.
-          const canonicalTitle = metadata?.persianTitle?.trim() || metadata?.title?.trim() || item.titleGuess?.trim();
-          if (canonicalTitle) {
-            const canonicalFolder = buildFolderName(canonicalTitle, metadata?.year || item.yearGuess);
-            const safeTitle = buildFolderName(canonicalTitle);
-            const fileBase = item.mediaType === 'episode' && item.seasonGuess && item.episodeGuess
-              ? safeTitle + ' - S' + String(item.seasonGuess).padStart(2, '0') + 'E' + String(item.episodeGuess).padStart(2, '0')
-              : canonicalFolder;
-            const canonicalFileName = fileBase + (item.extension ? '.' + item.extension : '');
-            try {
-              await service.renameItem(item.id, {
-                mode: 'both',
-                folderName: canonicalFolder,
-                fileName: canonicalFileName,
-              });
-              namesSynced += 1;
-            } catch (error) {
-              nameFailures += 1;
-              failures.push(item.fileName + ': تغییر نام پوشه/فیلم/زیرنویس انجام نشد؛ ' +
-                (error instanceof Error ? error.message : 'خطای نامشخص'));
-            }
-          } else {
-            nameFailures += 1;
-            failures.push(item.fileName + ': عنوان مطمئن برای تغییر نام پیدا نشد؛ نام فعلی حفظ شد');
-          }
-
-          // Refresh the item after a possible folder/file rename so sidecars are
-          // written beside the actual video path.
+          // Refresh the item after the transactional batch rename so offline
+          // metadata and artwork are saved beside the final video path.
           item = service.getItems().find((entry) => entry.id === operation.itemId);
           try {
             if (!item || !metadata) throw new Error('اطلاعات متادیتا برای این فایل موجود نیست');
