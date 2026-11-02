@@ -566,7 +566,9 @@ class LibraryService {
     const operations = proposal.operations.map((op) => {
       if (op.id !== operationId || op.excluded) return op;
       const destFolderPath = fs.joinPath(folder.path, newFolderName);
-      const destFilePath = fs.joinPath(destFolderPath, fs.baseName(op.sourcePath));
+      // Preserve the canonical filename already proposed by generateProposal.
+      // Editing only the destination folder must not revert the video to its old name.
+      const destFilePath = fs.joinPath(destFolderPath, fs.baseName(op.destFilePath));
       return {
         ...op,
         destFolderPath,
