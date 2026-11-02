@@ -334,6 +334,7 @@ class LibraryService {
       }
     }
     await this.persistItems();
+    await this.persistLog();
     return { succeeded, failed };
   }
 
@@ -467,6 +468,15 @@ class LibraryService {
         const nextPath = movedPath || replaceFolderPrefix(subtitle.filePath);
         return { ...subtitle, filePath: nextPath, fileName: fs.baseName(nextPath) };
       });
+    }
+
+    // Keep Undo destinations valid after this folder/file rename. Also remap
+    // log entries for sibling videos carried along by a shared series folder.
+    for (const entry of this.log) {
+      if (!entry.success || entry.type !== 'move') continue;
+      const nextPath = movedPathBySource.get(normalizePath(entry.destPath))
+        || replaceFolderPrefix(entry.destPath);
+      if (nextPath !== entry.destPath) entry.destPath = nextPath;
     }
   }
 
@@ -1000,6 +1010,13 @@ class LibraryService {
     if (item) {
       item.filePath = entry.sourcePath;
       item.parentFolder = fs.parentPath(entry.sourcePath);
+    }
+    for (const current of this.items) {
+      current.subtitles = current.subtitles.map((subtitle) => subtitle.filePath === entry.destPath
+        ? { ...subtitle, filePath: entry.sourcePath, fileName: fs.baseName(entry.sourcePath) }
+        : subtitle);
+    }
+    if (item || this.items.some((current) => current.subtitles.some((subtitle) => subtitle.filePath === entry.sourcePath))) {
       await this.persistItems();
     }
 
