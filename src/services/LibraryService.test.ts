@@ -96,6 +96,7 @@ describe('LibraryService — folder organization', () => {
 
     // Simulate a corrected title arriving after the organize/move step.
     item.titleGuess = 'FILM BAZ Final Batch Name';
+    item.yearGuess = 2040;
     const renameResult = await svc.renameOrganizedItemsBatch([item.id]);
     expect(renameResult.failed).toHaveLength(0);
     expect(renameResult.succeeded).toHaveLength(1);
