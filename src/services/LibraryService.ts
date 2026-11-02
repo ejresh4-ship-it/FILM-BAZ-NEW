@@ -722,9 +722,10 @@ class LibraryService {
       const canonicalTitle = metadata?.persianTitle?.trim() || metadata?.title?.trim() || item.titleGuess || item.fileName;
       const canonicalYear = metadata?.year || item.yearGuess;
       const folderName = buildFolderName(canonicalTitle, canonicalYear);
+      const safeTitle = buildFolderName(canonicalTitle);
       const extension = item.extension ? `.${item.extension}` : '';
       const canonicalBase = item.mediaType === 'episode' && item.seasonGuess && item.episodeGuess
-        ? `${canonicalTitle} - S${String(item.seasonGuess).padStart(2, '0')}E${String(item.episodeGuess).padStart(2, '0')}`
+        ? `${safeTitle} - S${String(item.seasonGuess).padStart(2, '0')}E${String(item.episodeGuess).padStart(2, '0')}`
         : folderName;
       const proposedFileName = `${canonicalBase}${extension}`;
       const destFolderPath = fs.joinPath(folder.path, folderName);
