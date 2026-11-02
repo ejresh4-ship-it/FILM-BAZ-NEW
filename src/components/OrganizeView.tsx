@@ -176,7 +176,7 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
         } else {
           // Keep naming consistent with the title/year used by the organizer.
           // Episodes retain their season/episode identifier in the filename.
-          const canonicalTitle = metadata?.title?.trim() || item.titleGuess?.trim();
+          const canonicalTitle = metadata?.persianTitle?.trim() || metadata?.title?.trim() || item.titleGuess?.trim();
           if (canonicalTitle) {
             const canonicalFolder = buildFolderName(canonicalTitle, metadata?.year || item.yearGuess);
             const fileBase = item.mediaType === 'episode' && item.seasonGuess && item.episodeGuess
