@@ -140,7 +140,7 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
   }
 
   async function finalizeSuccessfulFiles() {
-    if (!execResult || finalizeBusy) return;
+    if (!execResult || finalizeBusy || metadataBusy) return;
     const completed = execResult.succeeded;
     if (completed.length === 0) return;
 
@@ -181,7 +181,6 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
         const metadata = metadataService.getMetadataForItem(operation.itemId);
 
         if (!item) {
-          nameFailures += 1;
           offlineFailures += 1;
           failures.push(fs.baseName(operation.destFilePath) + ': فایل در کتابخانه پیدا نشد');
         } else {
@@ -400,8 +399,8 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
                 <p className="mt-1 text-xs leading-6 text-text-secondary">
                   با یک مرحله، نام پوشه و فیلم و زیرنویس‌ها هماهنگ می‌شود و اطلاعات، پوستر، پس‌زمینه و تصاویر بازیگران کنار ویدئو ذخیره می‌شوند. فایل‌های جانبی موجود بازنویسی نمی‌شوند.
                 </p>
-                <button onClick={() => void finalizeSuccessfulFiles()} disabled={finalizeBusy || execResult.succeeded.length === 0} className="btn-primary mt-3 text-sm disabled:opacity-50">
-                  {finalizeBusy ? <><Loader2 size={16} className="animate-spin" /> در حال تکمیل گروهی…</> : 'تغییر نام همه + ذخیره اطلاعات آفلاین'}
+                <button onClick={() => void finalizeSuccessfulFiles()} disabled={finalizeBusy || metadataBusy || execResult.succeeded.length === 0} className="btn-primary mt-3 text-sm disabled:opacity-50">
+                  {finalizeBusy ? <><Loader2 size={16} className="animate-spin" /> در حال تکمیل گروهی…</> : metadataBusy ? 'پس از تکمیل اطلاعات فعال می‌شود' : 'تغییر نام همه + ذخیره اطلاعات آفلاین'}
                 </button>
                 {finalizeProgress.total > 0 && (
                   <div className="mt-2 space-y-1 text-xs text-text-secondary">
