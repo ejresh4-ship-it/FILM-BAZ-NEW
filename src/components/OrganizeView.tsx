@@ -17,6 +17,8 @@ import { getLibraryService } from '@/services/LibraryService';
 import { formatFileSize, mediaTypeLabel, identificationLabel } from '@/lib/mediaFormat';
 import { toPersianDigits } from '@/lib/movieUtils';
 import { getFilesystemService } from '@/services/filesystemFactory';
+import { getMetadataService } from '@/services/metadata/MetadataService';
+import { notifyLibraryUpdated } from '@/services/libraryEvents';
 
 interface OrganizeViewProps {
   folderId: string;
@@ -34,6 +36,15 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
   const [editFolderName, setEditFolderName] = useState('');
   const [executing, setExecuting] = useState(false);
   const [execResult, setExecResult] = useState<OrgExecutionResult | null>(null);
+  const [metadataBusy, setMetadataBusy] = useState(false);
+  const [metadataProgress, setMetadataProgress] = useState({ completed: 0, total: 0, current: '', succeeded: 0, failed: 0 });
+  const [metadataFailures, setMetadataFailures] = useState<Array<{ fileName: string; reason: string }>>([]);
+  const [finalizeBusy, setFinalizeBusy] = useState(false);
+  const [finalizeProgress, setFinalizeProgress] = useState({
+    completed: 0, total: 0, namesSynced: 0, nameFailures: 0, offlineSaved: 0, offlineFailures: 0,
+  });
+  const [finalizeFailures, setFinalizeFailures] = useState<string[]>([]);
+  const [selectionMode, setSelectionMode] = useState<'all' | 'safe' | 'none'>('all');
 
   useEffect(() => {
     generate();
@@ -59,6 +70,16 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
     setProposal(service.toggleExclude(proposal, opId));
   }
 
+  function selectOperations(mode: 'all' | 'safe' | 'none') {
+    if (!proposal) return;
+    const selected = proposal.operations.map((operation) => ({
+      ...operation,
+      excluded: mode === 'none' || (mode === 'safe' && (operation.destFileExists || operation.uncertain)),
+    }));
+    setProposal(service.recalcProposal({ ...proposal, operations: selected }));
+    setSelectionMode(mode);
+  }
+
   function startEdit(op: OrgOperation) {
     setEditingOpId(op.id);
     const folderName = fs.baseName(op.destFolderPath);
@@ -75,6 +96,16 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
     setEditingOpId(null);
   }
 
+  async function enrichWholeFolder() {
+    if (metadataBusy) return;
+    const items = service.getItemsForFolder(folderId);
+    if (items.length === 0) { setError('فایلی برای تکمیل اطلاعات در این پوشه پیدا نشد.'); return; }
+    setMetadataBusy(true); setMetadataFailures([]);
+    setMetadataProgress({ completed: 0, total: items.length, current: '', succeeded: 0, failed: 0 });
+    try { const result = await getMetadataService().enrichItems(items, setMetadataProgress); setMetadataFailures(result.failed); notifyLibraryUpdated(); }
+    catch (e) { setError(e instanceof Error ? e.message : 'تکمیل اطلاعات ناموفق بود'); }
+    finally { setMetadataBusy(false); }
+  }
   async function execute() {
     if (!proposal) return;
     const activeOps = proposal.operations.filter((o) => !o.excluded);
@@ -97,6 +128,7 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
     try {
       const result = await service.executeProposal(proposal);
       setExecResult(result);
+      await enrichWholeFolder();
       // Recalc proposal to reflect any state changes
       const updated = service.recalcProposal(proposal);
       setProposal(updated);
@@ -104,6 +136,118 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
       setError(e instanceof Error ? e.message : 'خطا در اجرای عملیات');
     } finally {
       setExecuting(false);
+    }
+  }
+
+  async function finalizeSuccessfulFiles() {
+    if (!execResult || finalizeBusy || metadataBusy) return;
+    const completed = execResult.succeeded;
+    if (completed.length === 0) return;
+
+    if (!window.confirm(
+      'برای همه موارد موفق، نام پوشه، فیلم و زیرنویس‌ها با اطلاعات شناسایی‌شده هماهنگ شود و اطلاعات و تصاویر آفلاین کنار ویدئو ذخیره شود؟ فایل‌های مقصد موجود بازنویسی نمی‌شوند.'
+    )) return;
+
+    const metadataService = getMetadataService();
+    setFinalizeBusy(true);
+    setFinalizeFailures([]);
+    setFinalizeProgress({
+      completed: 0, total: completed.length, namesSynced: 0, nameFailures: 0, offlineSaved: 0, offlineFailures: 0,
+    });
+
+    let namesSynced = 0;
+    let nameFailures = 0;
+    let offlineSaved = 0;
+    let offlineFailures = 0;
+    const failures: string[] = [];
+
+    try {
+      await metadataService.load();
+      // Rename only items whose organization completed successfully. The service
+      // preflights and rolls back each video/subtitle group if any move fails.
+      const renameResult = await service.renameOrganizedItemsBatch(
+        completed.map((operation) => operation.itemId),
+      );
+      namesSynced = renameResult.succeeded.length;
+      nameFailures = renameResult.failed.length;
+      for (const failure of renameResult.failed) {
+        const failedItem = service.getItems().find((entry) => entry.id === failure.itemId);
+        failures.push((failedItem?.fileName || failure.itemId) + ': ' + failure.error);
+      }
+
+      for (let index = 0; index < completed.length; index += 1) {
+        const operation = completed[index];
+        let item = service.getItems().find((entry) => entry.id === operation.itemId);
+        const metadata = metadataService.getMetadataForItem(operation.itemId);
+
+        if (!item) {
+          offlineFailures += 1;
+          failures.push(fs.baseName(operation.destFilePath) + ': فایل در کتابخانه پیدا نشد');
+        } else {
+          // Refresh the item after the transactional batch rename so offline
+          // metadata and artwork are saved beside the final video path.
+          item = service.getItems().find((entry) => entry.id === operation.itemId);
+          try {
+            if (!item || !metadata) throw new Error('اطلاعات متادیتا برای این فایل موجود نیست');
+
+            const videoName = fs.baseName(item.filePath);
+            const dot = videoName.lastIndexOf('.');
+            const base = dot > 0 ? videoName.slice(0, dot) : videoName;
+            const jsonPath = fs.joinPath(item.parentFolder, base + '.film-baz.json');
+            const sidecarAlreadyExists = await fs.exists(jsonPath);
+            const savedImages: string[] = [];
+            const images = [
+              { label: 'poster', url: metadata.posterUrl },
+              { label: 'backdrop', url: metadata.backdropUrl },
+              ...metadata.cast.map((person, personIndex) => ({
+                label: 'cast-' + String(personIndex + 1).padStart(2, '0'),
+                url: person.photoUrl,
+              })),
+            ].filter((entry): entry is { label: string; url: string } => Boolean(entry.url));
+
+            for (const image of images) {
+              const extensionMatch = image.url.match(/\.(jpe?g|png|webp)(?:[?#]|$)/i);
+              const extension = extensionMatch?.[1]?.toLowerCase() || 'jpg';
+              const imagePath = fs.joinPath(item.parentFolder, base + '.' + image.label + '.' + extension);
+              if (await fs.exists(imagePath)) {
+                savedImages.push(fs.baseName(imagePath));
+                continue;
+              }
+              const result = await fs.downloadFile(image.url, imagePath);
+              if (result.success) savedImages.push(fs.baseName(imagePath));
+              else failures.push(videoName + ': دانلود تصویر ' + image.label + ' ناموفق بود');
+            }
+
+            if (!sidecarAlreadyExists) {
+              const sidecar = { ...metadata, offlineAssets: savedImages, exportedAt: new Date().toISOString() };
+              await fs.writeTextFile(jsonPath, JSON.stringify(sidecar, null, 2));
+            } else {
+              failures.push(videoName + ': فایل اطلاعات آفلاین از قبل موجود بود و بازنویسی نشد');
+            }
+            offlineSaved += 1;
+          } catch (error) {
+            offlineFailures += 1;
+            failures.push((item ? fs.baseName(item.filePath) : fs.baseName(operation.destFilePath)) + ': ' +
+              (error instanceof Error ? error.message : 'خطای ذخیره‌سازی آفلاین'));
+          }
+        }
+
+        setFinalizeProgress({
+          completed: index + 1,
+          total: completed.length,
+          namesSynced,
+          nameFailures,
+          offlineSaved,
+          offlineFailures,
+        });
+        setFinalizeFailures([...failures]);
+      }
+      notifyLibraryUpdated();
+    } catch (error) {
+      failures.push(error instanceof Error ? error.message : 'خطای کلی در تکمیل فایل‌های موفق');
+      setFinalizeFailures([...failures]);
+    } finally {
+      setFinalizeBusy(false);
     }
   }
 
@@ -143,8 +287,26 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
           سازماندهی فایل‌ها
         </h1>
         <p className="mt-1 text-sm text-text-muted">
-          پیش‌نمایش عملیات پیشنهادی قبل از اجرا — هیچ تغییری بدون تأیید شما انجام نمی‌شود
+          همه موارد این پوشه به‌صورت گروهی و پشت‌سرهم سامان‌دهی می‌شوند؛ هیچ تغییری بدون تأیید شما انجام نمی‌شود
         </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button onClick={() => void enrichWholeFolder()} disabled={metadataBusy} className="btn-primary text-sm disabled:opacity-50">
+            {metadataBusy ? <><Loader2 size={16} className="animate-spin" /> تکمیل اطلاعات…</> : <><Sparkles size={16} /> تکمیل اطلاعات تمام فیلم‌های پوشه</>}
+          </button>
+          <span className="text-xs text-text-muted">پوستر، داستان، بازیگران، کارگردان و ژانر از منابع فعال</span>
+        </div>
+        {metadataProgress.total > 0 && (
+          <div className="mt-3 rounded-lg border border-white/10 bg-surface-2 p-3">
+            <div className="mb-2 flex flex-wrap justify-between gap-2 text-xs text-text-secondary">
+              <span>پیشرفت تکمیل اطلاعات: {toPersianDigits(metadataProgress.completed)} از {toPersianDigits(metadataProgress.total)}</span>
+              <span>{toPersianDigits(Math.round(metadataProgress.completed / metadataProgress.total * 100))}٪</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gold transition-all" style={{ width: (metadataProgress.completed / metadataProgress.total * 100) + '%' }} /></div>
+            {metadataProgress.current && <p className="mt-2 truncate text-xs text-text-muted" dir="ltr">{metadataProgress.current}</p>}
+            <p className="mt-1 text-xs text-text-muted">{toPersianDigits(metadataProgress.succeeded)} موفق · {toPersianDigits(metadataProgress.failed)} ناموفق</p>
+            {metadataFailures.length > 0 && <div className="mt-2 max-h-32 space-y-1 overflow-y-auto">{metadataFailures.map((failure, index) => <p key={index} className="text-xs text-amber-300">{failure.fileName}: {failure.reason}</p>)}</div>}
+          </div>
+        )}
       </div>
 
       {proposal && proposal.operations.length === 0 ? (
@@ -179,6 +341,18 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
                   {toPersianDigits(proposal!.uncertainCount)} نیازمند بررسی
                 </span>
               )}
+            </div>
+          </div>
+
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-surface-2 p-3">
+            <div>
+              <p className="text-sm font-semibold text-white">انتخاب گروهی عملیات</p>
+              <p className="mt-1 text-xs text-text-muted">بدون کلیک روی تک‌تک فیلم‌ها، موارد را یک‌جا انتخاب کن.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => selectOperations('all')} className={`rounded-lg px-3 py-2 text-xs font-semibold ${selectionMode === 'all' ? 'bg-gold/20 text-gold-bright' : 'bg-white/5 text-text-secondary hover:bg-white/10'}`}>انتخاب همه</button>
+              <button onClick={() => selectOperations('safe')} className={`rounded-lg px-3 py-2 text-xs font-semibold ${selectionMode === 'safe' ? 'bg-green-500/15 text-green-300' : 'bg-white/5 text-text-secondary hover:bg-white/10'}`}>فقط موارد امن</button>
+              <button onClick={() => selectOperations('none')} className={`rounded-lg px-3 py-2 text-xs font-semibold ${selectionMode === 'none' ? 'bg-white/10 text-white' : 'bg-white/5 text-text-secondary hover:bg-white/10'}`}>لغو انتخاب</button>
             </div>
           </div>
 
@@ -220,6 +394,23 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
                   ))}
                 </div>
               )}
+              <div className="mt-4 rounded-lg border border-gold/20 bg-gold/5 p-3">
+                <p className="text-sm font-semibold text-white">تکمیل گروهی فایل‌های موفق</p>
+                <p className="mt-1 text-xs leading-6 text-text-secondary">
+                  با یک مرحله، نام پوشه و فیلم و زیرنویس‌ها هماهنگ می‌شود و اطلاعات، پوستر، پس‌زمینه و تصاویر بازیگران کنار ویدئو ذخیره می‌شوند. فایل‌های جانبی موجود بازنویسی نمی‌شوند.
+                </p>
+                <button onClick={() => void finalizeSuccessfulFiles()} disabled={finalizeBusy || metadataBusy || execResult.succeeded.length === 0} className="btn-primary mt-3 text-sm disabled:opacity-50">
+                  {finalizeBusy ? <><Loader2 size={16} className="animate-spin" /> در حال تکمیل گروهی…</> : metadataBusy ? 'پس از تکمیل اطلاعات فعال می‌شود' : 'تغییر نام همه + ذخیره اطلاعات آفلاین'}
+                </button>
+                {finalizeProgress.total > 0 && (
+                  <div className="mt-2 space-y-1 text-xs text-text-secondary">
+                    <p>پیشرفت: {toPersianDigits(finalizeProgress.completed)} از {toPersianDigits(finalizeProgress.total)}</p>
+                    <p>{toPersianDigits(finalizeProgress.namesSynced)} نام هماهنگ · {toPersianDigits(finalizeProgress.nameFailures)} خطای نام‌گذاری</p>
+                    <p>{toPersianDigits(finalizeProgress.offlineSaved)} ذخیره آفلاین · {toPersianDigits(finalizeProgress.offlineFailures)} خطای ذخیره</p>
+                  </div>
+                )}
+                {finalizeFailures.length > 0 && <div className="mt-2 max-h-32 space-y-1 overflow-y-auto">{finalizeFailures.map((failure, index) => <p key={index} className="text-xs text-amber-300">{failure}</p>)}</div>}
+              </div>
               <button
                 onClick={onViewLog}
                 className="mt-3 text-xs text-gold-bright hover:underline"
@@ -390,7 +581,7 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
           {!execResult && (
             <div className="sticky bottom-4 mt-6 flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-surface/95 p-4 shadow-cinematic backdrop-blur-md">
               <p className="text-sm text-text-secondary">
-                {toPersianDigits(activeOps.length)} عملیات آماده اجرا
+                {toPersianDigits(activeOps.length)} مورد آماده سامان‌دهی گروهی
               </p>
               <div className="flex items-center gap-2">
                 <button
@@ -401,7 +592,7 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
                 </button>
                 <button
                   onClick={execute}
-                  disabled={executing || activeOps.length === 0}
+                  disabled={executing || metadataBusy || activeOps.length === 0}
                   className="btn-primary text-sm disabled:opacity-50"
                 >
                   {executing ? (
@@ -412,7 +603,7 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
                   ) : (
                     <>
                       <Check size={16} />
-                      تأیید و اجرا
+                      سامان‌دهی همه موارد
                     </>
                   )}
                 </button>

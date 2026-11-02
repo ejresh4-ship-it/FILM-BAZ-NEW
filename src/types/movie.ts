@@ -13,6 +13,8 @@ export interface Movie {
   year: number;
   runtime: number; // minutes, 0 if unknown
   rating: number; // 0-10
+  ratingSource?: string;
+  voteCount?: number;
   genres: string[];
   category: ContentCategory;
   director?: string;

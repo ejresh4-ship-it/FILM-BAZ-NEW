@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Star } from 'lucide-react';
 import type { Movie } from '@/types/movie';
 import { toPersianDigits } from '@/lib/movieUtils';
+import { resolveOfflineImage } from '@/lib/offlineImageCache';
 
 interface MovieCardProps {
   movie: Movie;
@@ -10,6 +11,17 @@ interface MovieCardProps {
 
 export default function MovieCard({ movie, onClick }: MovieCardProps) {
   const [imgError, setImgError] = useState(false);
+  const [posterSrc, setPosterSrc] = useState(movie.posterUrl || '');
+
+  useEffect(() => {
+    let active = true;
+    setImgError(false);
+    setPosterSrc(movie.posterUrl || '');
+    if (movie.posterUrl) {
+      void resolveOfflineImage(movie.posterUrl).then((src) => { if (active) setPosterSrc(src); else if (src.startsWith('blob:')) URL.revokeObjectURL(src); });
+    }
+    return () => { active = false; };
+  }, [movie.posterUrl]);
 
   return (
     <button
@@ -19,9 +31,9 @@ export default function MovieCard({ movie, onClick }: MovieCardProps) {
     >
       <div className="relative overflow-hidden rounded-xl border border-white/5 bg-surface-2 shadow-card transition-all duration-200 group-hover:border-gold/30 group-hover:shadow-cinematic group-focus-visible:border-gold/40">
         <div className="aspect-[2/3] w-full">
-          {!imgError && movie.posterUrl ? (
+          {!imgError && posterSrc ? (
             <img
-              src={movie.posterUrl}
+              src={posterSrc}
               alt={`پوستر ${movie.title}`}
               loading="lazy"
               className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"

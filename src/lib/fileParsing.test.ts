@@ -48,6 +48,32 @@ describe('parseFileName', () => {
     expect(r.confident).toBe(true);
   });
 
+
+  it('strips download site names and release tags from movie titles', () => {
+    const r = parseFileName('Inception.2010.1080p.BluRay.x265-DownloadSite.mkv');
+    expect(r.titleGuess).toBe('Inception');
+    expect(r.yearGuess).toBe(2010);
+  });
+
+  it('strips MyMovies branding and similar release-site suffixes', () => {
+    const myMovies = parseFileName('The.Matrix.1999.1080p.BluRay.x264-MyMovies.mkv');
+    expect(myMovies.titleGuess).toBe('The Matrix');
+    expect(myMovies.yearGuess).toBe(1999);
+
+    const branded = parseFileName('Inception.2010.WEB-DL.MyMovies.com.mkv');
+    expect(branded.titleGuess).toBe('Inception');
+    expect(branded.yearGuess).toBe(2010);
+
+    const otherSite = parseFileName('Interstellar.2014.1080p-Filmyzilla.mkv');
+    expect(otherSite.titleGuess).toBe('Interstellar');
+  });
+
+  it('strips website suffixes without losing the original title', () => {
+    const r = parseFileName('The.Matrix.1999.1080p.www.example.com.mkv');
+    expect(r.titleGuess).toBe('The Matrix');
+    expect(r.yearGuess).toBe(1999);
+  });
+
   it('parses a series episode with S01E05', () => {
     const r = parseFileName('Breaking.Bad.S01E05.720p.WEB-DL.mkv');
     expect(r.mediaType).toBe('episode');
@@ -71,6 +97,22 @@ describe('parseFileName', () => {
   it('extracts language tag', () => {
     const r = parseFileName('The.Matrix.1999.fa.mkv');
     expect(r.language).toBe('fa');
+  });
+
+  it('strips MyMoviz and yts.mx branding', () => {
+    for (const suffix of ['MyMoviz', 'yts.mx']) {
+      const parsed = parseFileName(`The.Matrix.1999.1080p.${suffix}.mkv`);
+      expect(parsed.titleGuess).toBe('The Matrix');
+      expect(parsed.yearGuess).toBe(1999);
+    }
+  });
+
+  it('removes punctuation noise and double spelling variants', () => {
+    for (const suffix of ['double', 'doble', 'duble', 'dobbed', 'dubbed', 'fsrsi', 'farsi', 'sanig', 'web-rib', 'hardsub']) {
+      const parsed = parseFileName(`The.Matrix.1999.@$#&£_${suffix}.mkv`);
+      expect(parsed.titleGuess).toBe('The Matrix');
+      expect(parsed.yearGuess).toBe(1999);
+    }
   });
 
   it('marks very short titles as not confident', () => {

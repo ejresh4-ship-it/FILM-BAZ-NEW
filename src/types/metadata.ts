@@ -44,9 +44,11 @@ export interface MovieMetadata {
   year: number;
   releaseDate?: string; // ISO date
   overview?: string;
+  overviewLanguage?: 'fa' | 'en' | 'unknown';
   genres: string[];
   runtime: number; // minutes, 0 if unknown
   rating: number; // 0-10, 0 if unavailable
+  ratingSource?: string;
   voteCount?: number;
   director?: string;
   cast: MetadataPerson[]; // up to 10 principal cast
@@ -98,7 +100,7 @@ export interface ProviderConfig {
   supportsPersianTitles: boolean;
 }
 
-export type ProviderType = 'tmdb' | 'omdb' | 'custom';
+export type ProviderType = 'tmdb' | 'omdb' | 'wikidata' | 'mediawiki' | 'tvmaze' | 'custom';
 
 /** Provider lookup mode. */
 export type LookupMode = 'automatic' | 'manual' | 'combined';

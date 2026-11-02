@@ -6,11 +6,12 @@ interface MovieDetailsProps {
   movie: Movie;
   onBack: () => void;
   onPlay: (id: string) => void;
+  isEnriching?: boolean;
 }
 
-export default function MovieDetails({ movie, onBack, onPlay }: MovieDetailsProps) {
+export default function MovieDetails({ movie, onBack, onPlay, isEnriching = false }: MovieDetailsProps) {
   return (
-    <div className="fade-in">
+    <div className="details-page fade-in">
       {/* Backdrop hero */}
       <div className="relative h-[42vh] min-h-[280px] w-full overflow-hidden">
         {movie.backdropUrl || movie.posterUrl ? <img
@@ -118,8 +119,8 @@ export default function MovieDetails({ movie, onBack, onPlay }: MovieDetailsProp
         {/* Synopsis */}
         <div className="mt-8">
           <h2 className="text-lg font-bold text-white">خلاصه داستان</h2>
-          <p className="mt-2 max-w-3xl text-sm leading-7 text-text-secondary sm:text-base">
-            {movie.synopsis}
+          <p className="synopsis-text mt-2 max-w-3xl leading-7">
+            {isEnriching ? 'در حال دریافت خلاصه داستان و اطلاعات بازیگران...' : movie.synopsis && !movie.synopsis.includes('اطلاعات تکمیلی برای این عنوان ثبت نشده') ? movie.synopsis : 'خلاصه داستان این فیلم هنوز از منابع اطلاعاتی دریافت نشده است.'}
           </p>
         </div>
 

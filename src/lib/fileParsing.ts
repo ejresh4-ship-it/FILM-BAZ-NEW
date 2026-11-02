@@ -49,18 +49,27 @@ const LANG_TAG = /\b(fa|per|fas|eng|en|ar|fre|ger|spa)\b/i;
 
 // Quality/codec tags that should be stripped from the title.
 const NOISE = new RegExp(
-  String.raw`\b(1080p|1080i|720p|480p|2160p|4k|uhd|hd|web-dl|webrip|web|bluray|blu-ray|` +
+  String.raw`\b(1080p|1080i|720p|480p|2160p|4k|uhd|hd|web[ ._-]?dl|webrip|web|bluray|blu-ray|` +
     String.raw`brrip|bdrip|dvdrip|cam|ts|tc|hdrip|hdtv|remux|atmos|ddp|ddp5|` +
-    String.raw`x264|x265|h264|h265|hevc|aac|ac3|mp3|dts|10bit|avc|dxva|` +
-    String.raw`multi|dual|sub|subs|subtitle|custom|internal|proper|repack|extended|` +
-    String.raw`unrated|directors|cut|imax|hybrid|crf|cf|nfo)\b`,
+    String.raw`x264|x265|h264|h265|hevc|aac[ ._-]?vxt|aac|ac3|mp3|dts|2ch|10bit|avc|dxva|` +
+    String.raw`multi|dual|double|doble|duble|dobbed|dubbed|sub|subs|subtitle|hardsub|custom|internal|proper|repack|extended|fsrsi|farsi|sanig|rib|` +
+    String.raw`unrated|directors|cut|imax|lmax|korean|hdcam|film2media|mkvcage|farda[ ._-]?dl|midia|hybrid|crf|cf|nfo)\b`,
   'gi',
 );
 
+const SITE_OR_RELEASE_TAG = /(?:^|[ ._])(?:www\.)?[a-z0-9-]+\.(?:com|net|org|ir|co|to|io|tv)(?:\.[a-z]{2,})?(?:[ ._-].*)?$/i;
+const BRACKETED_TAG = /\[[^\]]*(?:www\.|\.com|\.net|\.org|\b(?:rarbg|yts|yify|ettv|eztv|tgx|pahe|psa|ganool)\b)[^\]]*\]/ig;
+
 function cleanTitle(raw: string): string {
-  let t = raw.replace(/[._]/g, ' ');
+  let t = raw.replace(BRACKETED_TAG, ' ').replace(/\bSITE DOMAIN\b/gi, ' ');
+  t = t.replace(SITE_OR_RELEASE_TAG, ' ');
+  t = t.replace(/(?:^|[ ._-])(?:mymovies|my[-_ ]?movies|mymoviz|yts(?:\\.mx)?|yify|rarbg|eztv|ettv|tgx|pahe|psa|ganool|galaxyrg|psarips|mkvcinemas|mkvcage|farda[ ._-]?dl|midia|worldfree4u|filmyzilla|moviesmod|mkvhub)(?:$|[ ._-].*)/i, ' ');
+  // Remove quality tags first, so a trailing group after x265/1080p becomes separable.
   t = t.replace(NOISE, ' ');
-  t = t.replace(/\s+/g, ' ').trim();
+  t = t.replace(/(?:^|[ .])-[A-Z0-9][A-Z0-9._-]{1,}$/i, ' ');
+  t = t.replace(/-(?:[A-Z][a-z0-9]+){2,}|-[A-Z0-9]{3,}$/, ' ');
+  t = t.replace(/[^\p{L}\p{N}\s.-]/gu, ' ');
+  t = t.replace(/[\s.-]+$/g, '').replace(/\s+/g, ' ').trim();
   // Title-case
   if (t) t = t.charAt(0).toUpperCase() + t.slice(1);
   return t;
@@ -68,7 +77,9 @@ function cleanTitle(raw: string): string {
 
 export function parseFileName(fileName: string): ParsedFilename {
   const base = stripExtension(fileName);
-  const normalized = base.replace(/[._]/g, ' ');
+  const normalized = base
+    .replace(/(?:www\.)?[a-z0-9-]+\.(?:com|net|org|ir|co|to|io|tv)(?:\.[a-z]{2,})?/ig, ' SITE DOMAIN ')
+    .replace(/[._]/g, ' ');
   let work = normalized;
 
   // Season/Episode → series

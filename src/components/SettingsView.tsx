@@ -75,15 +75,29 @@ type SectionId = (typeof sections)[number]['id'];
 
 export default function SettingsView({ onBack, onNavigateLibrary }: SettingsViewProps) {
   const [activeSection, setActiveSection] = useState<SectionId>('appearance');
-  const [theme, setTheme] = useState<'dark' | 'gold'>(() => {
+  const [fontScale, setFontScale] = useState(() => localStorage.getItem('film-baz:font-scale') || '16');
+  const [synopsisColor, setSynopsisColor] = useState(() => localStorage.getItem('film-baz:synopsis-color') || '#ffffff');
+  const [typography, setTypography] = useState(() => {
+    try { return { font: 'Vazirmatn', home: '16', headings: '30', details: '16', popup: '14', slideTitle: '52', slideBody: '16', slideInterval: '8', homeColor: '#f4f1ea', headingColor: '#ffffff', detailColor: '#f4f1ea', popupColor: '#f4f1ea', slideTitleColor: '#ffffff', slideBodyColor: '#ffffff', ...(JSON.parse(localStorage.getItem('film-baz:typography') || '{}')) }; }
+    catch { return { font: 'Vazirmatn', home: '16', headings: '30', details: '16', popup: '14', slideTitle: '52', slideBody: '16', slideInterval: '8', homeColor: '#f4f1ea', headingColor: '#ffffff', detailColor: '#f4f1ea', popupColor: '#f4f1ea', slideTitleColor: '#ffffff', slideBodyColor: '#ffffff' }; }
+  });
+  const setType = (key: string, value: string) => setTypography((current: Record<string, string>) => ({ ...current, [key]: value }));
+  const [theme, setTheme] = useState<'dark' | 'gold' | 'neon' | 'crimson'>(() => {
     const saved = localStorage.getItem('film-baz:theme');
-    return saved === 'gold' ? 'gold' : 'dark';
+    return saved === 'gold' || saved === 'neon' || saved === 'crimson' ? saved : 'dark';
   });
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem('film-baz:theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--app-font-size', `${fontScale}px`);
+    document.documentElement.style.setProperty('--synopsis-color', synopsisColor);
+    localStorage.setItem('film-baz:font-scale', fontScale);
+    localStorage.setItem('film-baz:synopsis-color', synopsisColor);
+  }, [fontScale, synopsisColor]);
 
   return (
     <div className="mx-auto max-w-[1200px] px-4 py-6 lg:px-8 fade-in">
@@ -143,12 +157,47 @@ export default function SettingsView({ onBack, onNavigateLibrary }: SettingsView
                       onClick={() => setTheme('gold')}
                       swatch="linear-gradient(135deg, #0d1320, #d4af37)"
                     />
+                    <ThemeOption
+                      label="Midnight Neon"
+                      active={theme === 'neon'}
+                      onClick={() => setTheme('neon')}
+                      swatch="linear-gradient(135deg, #080b20 0%, #7028d8 55%, #08b9ff 100%)"
+                    />
+                    <ThemeOption
+                      label="Crimson Glass"
+                      active={theme === 'crimson'}
+                      onClick={() => setTheme('crimson')}
+                      swatch="linear-gradient(135deg, #080708 0%, #37101d 58%, #f04462 100%)"
+                    />
                   </div>
                 </div>
-                <div className="mt-5 border-t border-white/5 pt-4">
-                  <p className="text-sm text-text-secondary">
-                    سایر تنظیمات ظاهر مانند اندازه فونت و فشرده‌سازی نمایش در فاز بعدی اضافه می‌شود.
-                  </p>
+                <div className="mt-5 grid gap-4 border-t border-white/5 pt-5 sm:grid-cols-2">
+                  <label className="block sm:col-span-2"><span className="mb-2 block text-sm font-medium text-text-secondary">خانواده فونت برنامه</span><select value={typography.font} onChange={e=>setType('font',e.target.value)} className="w-full rounded-lg border border-white/15 bg-base px-3 py-2.5 text-white"><option>Vazirmatn</option><option>Noto Sans Arabic</option><option>Cairo</option><option>Tahoma</option><option>Arial</option></select></label>
+                  <StyleControl label="اندازه متن صفحه اصلی" value={typography.home} onChange={v=>setType('home',v)} color={typography.homeColor} onColor={v=>setType('homeColor',v)} />
+                  <StyleControl label="اندازه تیترها" value={typography.headings} onChange={v=>setType('headings',v)} color={typography.headingColor} onColor={v=>setType('headingColor',v)} />
+                  <StyleControl label="متن صفحات جزئیات" value={typography.details} onChange={v=>setType('details',v)} color={typography.detailColor} onColor={v=>setType('detailColor',v)} />
+                  <StyleControl label="متن پاپ‌آپ‌ها" value={typography.popup} onChange={v=>setType('popup',v)} color={typography.popupColor} onColor={v=>setType('popupColor',v)} />
+                  <StyleControl label="عنوان اسلایدها" value={typography.slideTitle} onChange={v=>setType('slideTitle',v)} color={typography.slideTitleColor} onColor={v=>setType('slideTitleColor',v)} />
+                  <StyleControl label="توضیحات اسلایدها" value={typography.slideBody} onChange={v=>setType('slideBody',v)} color={typography.slideBodyColor} onColor={v=>setType('slideBodyColor',v)} />
+                  <label className="block sm:col-span-2"><span className="mb-2 block text-sm font-medium text-text-secondary">سرعت تعویض اسلاید (ثانیه)</span><select value={typography.slideInterval} onChange={e=>setType('slideInterval',e.target.value)} className="w-full rounded-lg border border-white/15 bg-base px-3 py-2.5 text-white"><option value="4">۴ ثانیه</option><option value="6">۶ ثانیه</option><option value="8">۸ ثانیه</option><option value="10">۱۰ ثانیه</option><option value="15">۱۵ ثانیه</option><option value="0">فقط دستی</option></select></label>
+                </div>
+                <div className="mt-5 grid gap-5 border-t border-white/5 pt-5 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-medium text-text-secondary">اندازه متن برنامه</span>
+                    <select value={fontScale} onChange={(e) => setFontScale(e.target.value)} className="w-full rounded-lg border border-white/15 bg-base px-3 py-2.5 text-white">
+                      <option value="14">کوچک</option><option value="16">متوسط</option><option value="18">بزرگ</option><option value="20">خیلی بزرگ</option>
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-medium text-text-secondary">رنگ خلاصه فیلم و سریال</span>
+                    <select value={synopsisColor} onChange={(e) => setSynopsisColor(e.target.value)} className="w-full rounded-lg border border-white/15 bg-base px-3 py-2.5 text-white">
+                      <option value="#ffffff">سفید</option><option value="#f4f1ea">سفید گرم</option><option value="#d1d5db">خاکستری روشن</option><option value="#f0c75e">طلایی</option>
+                    </select>
+                  </label>
+                  <div className="sm:col-span-2 rounded-lg border border-white/10 bg-base/60 p-3">
+                    <p className="text-sm" style={{ color: synopsisColor, fontSize: `${fontScale}px` }}>نمونه متن خلاصه داستان؛ تنظیمات اندازه و رنگ را همین‌جا ببین.</p>
+                    <p className="mt-2 text-xs text-text-muted">فونت فعلی برنامه Vazirmatn است و اندازه متن عمومی با این گزینه تغییر می‌کند.</p>
+                  </div>
                 </div>
               </SettingsPanel>
             )}
@@ -217,6 +266,10 @@ export default function SettingsView({ onBack, onNavigateLibrary }: SettingsView
       </div>
     </div>
   );
+}
+
+function StyleControl({label,value,onChange,color,onColor}:{label:string;value:string;onChange:(v:string)=>void;color:string;onColor:(v:string)=>void}) {
+  return <div className="grid grid-cols-2 gap-2"><label className="block"><span className="mb-2 block text-sm font-medium text-text-secondary">{label} (px)</span><select value={value} onChange={e=>onChange(e.target.value)} className="w-full rounded-lg border border-white/15 bg-base px-2 py-2.5 text-white">{['12','14','16','18','20','24','28','32','36','44','52','60','68'].map(v=><option key={v} value={v}>{v}</option>)}</select></label><label className="block"><span className="mb-2 block text-sm font-medium text-text-secondary">رنگ</span><input type="color" value={color} onChange={e=>onColor(e.target.value)} className="h-[42px] w-full cursor-pointer rounded-lg border border-white/15 bg-base p-1"/></label></div>;
 }
 
 function SettingsPanel({

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Play, Info, Star, Clock, Calendar } from 'lucide-react';
+import { X, Play, Info, Star, Clock, Calendar, User } from 'lucide-react';
 import type { Movie } from '@/types/movie';
 import { formatRuntime, toPersianDigits } from '@/lib/movieUtils';
 
@@ -8,9 +8,10 @@ interface QuickViewModalProps {
   onClose: () => void;
   onPlay: (id: string) => void;
   onOpenDetails: (id: string) => void;
+  isEnriching?: boolean;
 }
 
-export default function QuickViewModal({ movie, onClose, onPlay, onOpenDetails }: QuickViewModalProps) {
+export default function QuickViewModal({ movie, onClose, onPlay, onOpenDetails, isEnriching = false }: QuickViewModalProps) {
   const [posterError, setPosterError] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -49,7 +50,7 @@ export default function QuickViewModal({ movie, onClose, onPlay, onOpenDetails }
     >
       <div
         ref={dialogRef}
-        className="relative my-8 w-full max-w-3xl overflow-hidden rounded-2xl border border-white/10 bg-surface shadow-cinematic scale-in"
+        className="quick-view-modal relative my-8 w-full max-w-3xl overflow-hidden rounded-2xl border border-white/10 bg-surface shadow-cinematic scale-in"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close button */}
@@ -111,9 +112,18 @@ export default function QuickViewModal({ movie, onClose, onPlay, onOpenDetails }
                 <span className="inline-flex items-center gap-1">
                   <Star size={13} className="fill-gold-bright text-gold-bright" />
                   {toPersianDigits(movie.rating.toFixed(1))}
+                  {movie.ratingSource && <span className="text-[10px] text-text-muted">({movie.ratingSource})</span>}
+                  {movie.voteCount ? <span className="text-[10px] text-text-muted">· {toPersianDigits(movie.voteCount)} رأی</span> : null}
                 </span>
               )}
             </div>
+
+            {isEnriching && (
+              <div className="mt-3 flex items-center gap-2 text-xs text-gold-bright" role="status" aria-live="polite">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-gold-bright" />
+                در حال دریافت امتیاز و خلاصه داستان از منابع اطلاعاتی...
+              </div>
+            )}
 
             {/* Genres */}
             {movie.genres.length > 0 && (
@@ -129,10 +139,21 @@ export default function QuickViewModal({ movie, onClose, onPlay, onOpenDetails }
               </div>
             )}
 
+            {/* Director */}
+            {movie.director && (
+              <div className="mt-3 flex items-center gap-1.5 text-xs text-text-secondary">
+                <User size={13} className="text-text-muted" />
+                <span className="text-text-muted">کارگردان:</span> {movie.director}
+              </div>
+            )}
+
             {/* Synopsis */}
-            <p className="mt-3 text-sm leading-relaxed text-text-secondary line-clamp-4">
-              {movie.synopsis}
-            </p>
+            <div className="mt-3">
+              <p className="mb-1 text-xs font-semibold text-text-muted">خلاصه داستان</p>
+              <p className="text-sm leading-relaxed text-text-secondary line-clamp-4">
+                {movie.synopsis && !movie.synopsis.includes('اطلاعات تکمیلی برای این عنوان ثبت نشده') ? movie.synopsis : isEnriching ? 'در حال بررسی منابع اطلاعاتی...' : 'خلاصه داستان هنوز از منابع فعال پیدا نشده است.'}
+              </p>
+            </div>
 
             {/* Cast */}
             {movie.cast.length > 0 && (

@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { Search, Settings, Download, X } from 'lucide-react';
+import { Search, Settings, Download, X, Wrench } from 'lucide-react';
 import Logo from './Logo';
 import type { Movie } from '@/types/movie';
 
-export type NavView = 'home' | 'movies' | 'series' | 'kids' | 'genres' | 'settings' | 'library' | 'assistant';
+export type NavView = 'home' | 'movies' | 'series' | 'kids' | 'genres' | 'settings' | 'library' | 'assistant' | 'tools';
 
 interface HeaderProps {
   activeView: NavView;
@@ -182,6 +182,7 @@ export default function Header({ activeView, onNavigate, onOpenMovie, movies }: 
         </div>
 
         {/* Icon buttons */}
+        <button onClick={() => onNavigate('tools')} className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${activeView === 'tools' ? 'bg-white/10 text-gold-bright' : 'text-text-secondary hover:bg-white/5 hover:text-white'}`} aria-label="ابزارها" title="پاک‌سازی و سامان‌دهی آرشیو"><Wrench size={20} /></button>
         <button
           onClick={() => onNavigate('library')}
           className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${

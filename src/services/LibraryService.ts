@@ -18,6 +18,7 @@ import type {
 import type { DirEntry } from '@/services/filesystem';
 import { getFilesystemService } from '@/services/filesystemFactory';
 import { idbGet, idbSet } from '@/services/idbStore';
+import { getMetadataService } from '@/services/metadata/MetadataService';
 import {
   isVideoFile,
   isSubtitleFile,
@@ -160,47 +161,131 @@ class LibraryService {
     const destinationFolder = renameFolder
       ? fs.joinPath(fs.parentPath(sourceFolderPath), folderName)
       : sourceFolderPath;
+    const folderWillMove = renameFolder && destinationFolder !== sourceFolderPath;
     const destinationFile = fs.joinPath(destinationFolder, fileName);
+    const videoPathAfterFolderMove = folderWillMove
+      ? fs.joinPath(destinationFolder, item.fileName)
+      : sourceItemPath;
 
-    if (renameFolder && destinationFolder !== sourceFolderPath && await fs.exists(destinationFolder)) {
+    if (folderWillMove && await fs.exists(destinationFolder)) {
       throw new Error('پوشه مقصد از قبل وجود دارد');
-    }
-    if (renameFile && destinationFile !== sourceItemPath && await fs.exists(destinationFile)) {
-      throw new Error('فایل مقصد از قبل وجود دارد');
     }
     if (!await fs.exists(sourceItemPath)) throw new Error('فایل اصلی یافت نشد');
     if (renameFolder && !await fs.exists(sourceFolderPath)) throw new Error('پوشه اصلی یافت نشد');
-
-    if (renameFolder && destinationFolder !== sourceFolderPath) {
-      const result = await fs.moveFile(sourceFolderPath, destinationFolder);
-      if (!result.success) throw new Error(result.error || 'تغییر نام پوشه ناموفق بود');
+    if (renameFile && destinationFile !== videoPathAfterFolderMove && await fs.exists(destinationFile)) {
+      throw new Error('فایل مقصد از قبل وجود دارد');
     }
-    if (renameFile && destinationFile !== sourceItemPath) {
-      const currentFilePath = renameFolder
-        ? fs.joinPath(destinationFolder, item.fileName)
-        : sourceItemPath;
-      const result = await fs.moveFile(currentFilePath, destinationFile);
-      if (!result.success) {
-        if (renameFolder) await fs.moveFile(destinationFolder, sourceFolderPath);
-        throw new Error(result.error || 'تغییر نام فایل ناموفق بود');
+
+    const removeExtension = (name: string) => {
+      const dot = name.lastIndexOf('.');
+      return dot > 0 ? name.slice(0, dot) : name;
+    };
+    const oldVideoBase = removeExtension(item.fileName);
+    const newVideoBase = removeExtension(fileName);
+    const oldFolderPrefix = sourceFolderPath.endsWith('\\') ? sourceFolderPath : sourceFolderPath + '\\';
+    const rebaseFolderPath = (path: string) => {
+      if (path === sourceFolderPath) return destinationFolder;
+      if (path.startsWith(oldFolderPrefix)) {
+        return destinationFolder + path.slice(sourceFolderPath.length);
+      }
+      return path;
+    };
+
+    // Preflight every subtitle before changing the folder or video. A subtitle
+    // conflict or missing source must not leave a partially renamed group.
+    const subtitlePlans = renameFile ? item.subtitles.map((subtitle) => {
+      const oldSubtitleBase = removeExtension(subtitle.fileName);
+      const suffix = oldSubtitleBase.toLowerCase().startsWith(oldVideoBase.toLowerCase())
+        ? oldSubtitleBase.slice(oldVideoBase.length)
+        : (oldSubtitleBase ? '.' + oldSubtitleBase : '');
+      const subtitleExtension = subtitle.extension || subtitle.fileName.split('.').pop() || 'srt';
+      const nextName = newVideoBase + suffix + '.' + subtitleExtension;
+      const sourceAfterFolderMove = folderWillMove ? rebaseFolderPath(subtitle.filePath) : subtitle.filePath;
+      return {
+        originalPath: subtitle.filePath,
+        sourcePath: sourceAfterFolderMove,
+        destinationPath: fs.joinPath(destinationFolder, nextName),
+        destinationName: nextName,
+      };
+    }) : [];
+
+    for (const plan of subtitlePlans) {
+      if (!await fs.exists(plan.originalPath)) {
+        throw new Error('زیرنویس مبدأ یافت نشد: ' + fs.baseName(plan.originalPath));
+      }
+      if (plan.destinationPath !== plan.sourcePath && await fs.exists(plan.destinationPath)) {
+        throw new Error('فایل زیرنویس مقصد از قبل وجود دارد: ' + plan.destinationName);
       }
     }
 
-    const oldFolderPrefix = sourceFolderPath.endsWith('\\') ? sourceFolderPath : `${sourceFolderPath}\\`;
+    let folderMoved = false;
+    const movedSubtitles: Array<{ sourcePath: string; destinationPath: string }> = [];
+    const rollback = async () => {
+      const rollbackErrors: string[] = [];
+      for (const moved of [...movedSubtitles].reverse()) {
+        const result = await fs.moveFile(moved.destinationPath, moved.sourcePath);
+        if (!result.success) rollbackErrors.push(fs.baseName(moved.destinationPath));
+      }
+      if (folderMoved) {
+        const result = await fs.moveFile(destinationFolder, sourceFolderPath);
+        if (!result.success) rollbackErrors.push(fs.baseName(destinationFolder));
+      }
+      return rollbackErrors;
+    };
+
+    if (folderWillMove) {
+      const result = await fs.moveFile(sourceFolderPath, destinationFolder);
+      if (!result.success) throw new Error(result.error || 'تغییر نام پوشه ناموفق بود');
+      folderMoved = true;
+    }
+
+    // Rename subtitles first, then the video. If any step fails, restore all
+    // already moved subtitles and the original folder name.
+    for (const plan of subtitlePlans) {
+      if (plan.destinationPath === plan.sourcePath) continue;
+      const result = await fs.moveFile(plan.sourcePath, plan.destinationPath);
+      if (!result.success) {
+        const rollbackErrors = await rollback();
+        const suffix = rollbackErrors.length ? '؛ بازگردانی کامل انجام نشد: ' + rollbackErrors.join('، ') : '';
+        throw new Error((result.error || 'تغییر نام زیرنویس ناموفق بود') + suffix);
+      }
+      movedSubtitles.push({ sourcePath: plan.sourcePath, destinationPath: plan.destinationPath });
+    }
+
+    if (renameFile && destinationFile !== videoPathAfterFolderMove) {
+      const result = await fs.moveFile(videoPathAfterFolderMove, destinationFile);
+      if (!result.success) {
+        const rollbackErrors = await rollback();
+        const suffix = rollbackErrors.length ? '؛ بازگردانی کامل انجام نشد: ' + rollbackErrors.join('، ') : '';
+        throw new Error((result.error || 'تغییر نام فایل ناموفق بود') + suffix);
+      }
+    }
+
+    const renamedSubtitlePaths = new Map<string, string>();
+    for (const plan of subtitlePlans) renamedSubtitlePaths.set(plan.originalPath, plan.destinationPath);
+
     for (const current of this.items) {
-      if (renameFolder && (current.parentFolder === sourceFolderPath || current.filePath.startsWith(oldFolderPrefix))) {
+      const isInsideRenamedFolder = folderWillMove &&
+        (current.parentFolder === sourceFolderPath || current.filePath.startsWith(oldFolderPrefix));
+      if (isInsideRenamedFolder) {
         current.parentFolder = destinationFolder;
         current.filePath = current.filePath === sourceItemPath
           ? destinationFile
-          : current.filePath.replace(sourceFolderPath, destinationFolder);
-        current.subtitles = current.subtitles.map((subtitle) => ({
-          ...subtitle,
-          filePath: subtitle.filePath.replace(sourceFolderPath, destinationFolder),
-        }));
-        if (current.id === itemId && renameFile) current.fileName = fileName;
-      } else if (current.id === itemId && renameFile) {
-        current.filePath = destinationFile;
-        current.fileName = fileName;
+          : rebaseFolderPath(current.filePath);
+        current.subtitles = current.subtitles.map((subtitle) => {
+          const movedPath = renamedSubtitlePaths.get(subtitle.filePath);
+          const nextPath = movedPath || rebaseFolderPath(subtitle.filePath);
+          return { ...subtitle, filePath: nextPath, fileName: fs.baseName(nextPath) };
+        });
+      } else if (current.id === itemId) {
+        if (renameFile) {
+          current.filePath = destinationFile;
+          current.fileName = fileName;
+        }
+        current.subtitles = current.subtitles.map((subtitle) => {
+          const nextPath = renamedSubtitlePaths.get(subtitle.filePath) || subtitle.filePath;
+          return { ...subtitle, filePath: nextPath, fileName: fs.baseName(nextPath) };
+        });
       }
     }
 
@@ -223,6 +308,176 @@ class LibraryService {
       }
     }
     return { succeeded, failed };
+  }
+
+  /**
+   * Apply canonical folder/video/subtitle names to a set of successfully
+   * organized items. Each video + its sidecar subtitles is treated as one
+   * transaction; conflicts never overwrite existing files.
+   */
+  async renameOrganizedItemsBatch(
+    itemIds: string[],
+  ): Promise<{ succeeded: Array<{ itemId: string }>; failed: Array<{ itemId: string; error: string }> }> {
+    await this.load();
+    await getMetadataService().load();
+    const succeeded: Array<{ itemId: string }> = [];
+    const failed: Array<{ itemId: string; error: string }> = [];
+    for (const itemId of [...new Set(itemIds)]) {
+      try {
+        await this.renameOrganizedItemCanonical(itemId);
+        succeeded.push({ itemId });
+      } catch (error) {
+        failed.push({
+          itemId,
+          error: error instanceof Error ? error.message : 'تغییر نام گروه فایل ناموفق بود',
+        });
+      }
+    }
+    await this.persistItems();
+    await this.persistLog();
+    return { succeeded, failed };
+  }
+
+  private async renameOrganizedItemCanonical(itemId: string): Promise<void> {
+    const item = this.items.find((candidate) => candidate.id === itemId);
+    if (!item) throw new Error('فایل کتابخانه یافت نشد');
+
+    const fs = getFilesystemService();
+    const metadata = getMetadataService().getMetadataForItem(item.id);
+    const canonicalTitle = metadata?.persianTitle?.trim() || metadata?.title?.trim() || item.titleGuess || stripExtension(item.fileName);
+    const canonicalYear = metadata?.year || item.yearGuess;
+    const folderName = buildFolderName(canonicalTitle, canonicalYear);
+    const safeTitle = buildFolderName(canonicalTitle);
+    const extension = item.extension || (item.fileName.includes('.') ? item.fileName.slice(item.fileName.lastIndexOf('.') + 1) : '');
+    const fileBase = item.mediaType === 'episode' && item.seasonGuess && item.episodeGuess
+      ? `${safeTitle} - S${String(item.seasonGuess).padStart(2, '0')}E${String(item.episodeGuess).padStart(2, '0')}`
+      : folderName;
+    const videoName = extension ? `${fileBase}.${extension}` : fileBase;
+
+    const sourceFolder = item.parentFolder;
+    const libraryFolder = this.folders.find((folder) => folder.id === item.folderId);
+    if (libraryFolder?.path && normalizePath(libraryFolder.path) === normalizePath(sourceFolder)) {
+      throw new Error('پوشه اصلی کتابخانه قابل تغییر نام نیست');
+    }
+    if (!(await fs.exists(sourceFolder))) throw new Error('پوشه فعلی فیلم یافت نشد');
+    if (!(await fs.exists(item.filePath))) throw new Error('فایل ویدئویی یافت نشد');
+
+    const destinationFolder = fs.joinPath(fs.parentPath(sourceFolder), folderName);
+    const renameFolder = normalizePath(destinationFolder) !== normalizePath(sourceFolder);
+    if (renameFolder && await fs.exists(destinationFolder)) {
+      throw new Error('پوشه مقصد از قبل وجود دارد؛ برای جلوگیری از ادغام یا بازنویسی، تغییر نام انجام نشد');
+    }
+
+    const oldVideoBase = stripExtension(fs.baseName(item.filePath));
+    const fileMoves: Array<{ sourcePath: string; targetPath: string }> = [];
+    const targetVideoPath = fs.joinPath(sourceFolder, videoName);
+    fileMoves.push({ sourcePath: item.filePath, targetPath: targetVideoPath });
+
+    for (const subtitle of item.subtitles) {
+      if (!(await fs.exists(subtitle.filePath))) {
+        throw new Error(`زیرنویس مبدأ یافت نشد: ${subtitle.fileName}`);
+      }
+      const oldSubtitleBase = stripExtension(subtitle.fileName);
+      const suffix = oldSubtitleBase.toLowerCase().startsWith(oldVideoBase.toLowerCase())
+        ? oldSubtitleBase.slice(oldVideoBase.length)
+        : (oldSubtitleBase ? `.${oldSubtitleBase}` : '');
+      const subtitleExtension = subtitle.extension || subtitle.fileName.split('.').pop() || '';
+      const subtitleName = subtitleExtension ? `${fileBase}${suffix}.${subtitleExtension}` : `${fileBase}${suffix}`;
+      fileMoves.push({
+        sourcePath: subtitle.filePath,
+        targetPath: fs.joinPath(sourceFolder, subtitleName),
+      });
+    }
+
+    const targetKeys = new Set<string>();
+    for (const move of fileMoves) {
+      const targetKey = normalizePath(move.targetPath);
+      if (targetKeys.has(targetKey)) throw new Error('نام مقصد چند فایل یکسان شده است');
+      targetKeys.add(targetKey);
+      if (normalizePath(move.sourcePath) !== targetKey && await fs.exists(move.targetPath)) {
+        throw new Error(`فایل مقصد از قبل وجود دارد: ${fs.baseName(move.targetPath)}`);
+      }
+    }
+
+    const movedFiles: Array<{ sourcePath: string; targetPath: string }> = [];
+    for (const move of fileMoves) {
+      if (normalizePath(move.sourcePath) === normalizePath(move.targetPath)) continue;
+      const result = await fs.moveFile(move.sourcePath, move.targetPath);
+      if (!result.success) {
+        const rollbackErrors: string[] = [];
+        for (const moved of [...movedFiles].reverse()) {
+          const rollback = await fs.moveFile(moved.targetPath, moved.sourcePath);
+          if (!rollback.success) rollbackErrors.push(fs.baseName(moved.targetPath));
+        }
+        const rollbackNote = rollbackErrors.length
+          ? `؛ بازگردانی این فایل‌ها هم ناموفق بود: ${rollbackErrors.join('، ')}`
+          : '';
+        throw new Error(`${result.error || 'تغییر نام فایل ناموفق بود'}${rollbackNote}`);
+      }
+      movedFiles.push(move);
+    }
+
+    if (renameFolder) {
+      const folderResult = await fs.moveFile(sourceFolder, destinationFolder);
+      if (!folderResult.success) {
+        const rollbackErrors: string[] = [];
+        for (const moved of [...movedFiles].reverse()) {
+          const rollback = await fs.moveFile(moved.targetPath, moved.sourcePath);
+          if (!rollback.success) rollbackErrors.push(fs.baseName(moved.targetPath));
+        }
+        const rollbackNote = rollbackErrors.length
+          ? `؛ بازگردانی این فایل‌ها ناموفق بود: ${rollbackErrors.join('، ')}`
+          : '';
+        throw new Error(`${folderResult.error || 'تغییر نام پوشه ناموفق بود'}${rollbackNote}`);
+      }
+    }
+
+    const replaceFolderPrefix = (filePath: string): string => {
+      if (!renameFolder) return filePath;
+      const normalizedPath = normalizePath(filePath);
+      const normalizedFolder = normalizePath(sourceFolder);
+      if (normalizedPath === normalizedFolder) return destinationFolder;
+      if (normalizedPath.startsWith(`${normalizedFolder}/`)) {
+        return `${destinationFolder}${filePath.slice(sourceFolder.length)}`;
+      }
+      return filePath;
+    };
+    const movedPathBySource = new Map<string, string>();
+    for (const move of fileMoves) {
+      const finalPath = renameFolder
+        ? fs.joinPath(destinationFolder, fs.baseName(move.targetPath))
+        : move.targetPath;
+      movedPathBySource.set(normalizePath(move.sourcePath), finalPath);
+    }
+
+    for (const current of this.items) {
+      const isInsideRenamedFolder = normalizePath(current.parentFolder) === normalizePath(sourceFolder)
+        || normalizePath(current.filePath).startsWith(`${normalizePath(sourceFolder)}/`);
+      if (!isInsideRenamedFolder && current.id !== itemId) continue;
+
+      if (renameFolder) current.parentFolder = destinationFolder;
+      if (current.id === itemId) {
+        current.filePath = fs.joinPath(destinationFolder, videoName);
+        current.fileName = videoName;
+      } else {
+        current.filePath = replaceFolderPrefix(current.filePath);
+        current.fileName = fs.baseName(current.filePath);
+      }
+      current.subtitles = current.subtitles.map((subtitle) => {
+        const movedPath = movedPathBySource.get(normalizePath(subtitle.filePath));
+        const nextPath = movedPath || replaceFolderPrefix(subtitle.filePath);
+        return { ...subtitle, filePath: nextPath, fileName: fs.baseName(nextPath) };
+      });
+    }
+
+    // Keep Undo destinations valid after this folder/file rename. Also remap
+    // log entries for sibling videos carried along by a shared series folder.
+    for (const entry of this.log) {
+      if (!entry.success || entry.type !== 'move') continue;
+      const nextPath = movedPathBySource.get(normalizePath(entry.destPath))
+        || replaceFolderPrefix(entry.destPath);
+      if (nextPath !== entry.destPath) entry.destPath = nextPath;
+    }
   }
 
   // --- Scanning ---
@@ -306,8 +561,13 @@ class LibraryService {
       (e) => e.isFile && isSubtitleFile(e.name, this.prefs.subtitleExtensions),
     );
 
-    // Build MediaItems
-    const newItems: MediaItem[] = [];
+    // Incremental scan: retain unchanged records (and their IDs/metadata links),
+    // update changed files in place, and add only genuinely new paths.
+    const previousByPath = new Map(
+      this.items.filter((item) => item.folderId === folderId).map((item) => [normalizePath(item.filePath), item]),
+    );
+    const scannedItems: MediaItem[] = [];
+    let addedOrChangedCount = 0;
     const subtitlesByParent: Record<string, DirEntry[]> = {};
     for (const sub of subtitleEntries) {
       const parent = fs.parentPath(sub.path);
@@ -330,8 +590,12 @@ class LibraryService {
           language: parseSubtitleLanguage(s.name),
         }));
 
-      newItems.push({
-        id: uid(),
+      const previous = previousByPath.get(normalizePath(vEntry.path));
+      const unchanged = previous && previous.fileSize === vEntry.size && previous.lastModified === vEntry.lastModified;
+      if (!unchanged) addedOrChangedCount += 1;
+      scannedItems.push({
+        ...(previous || {} as MediaItem),
+        id: previous?.id || uid(),
         folderId,
         filePath: vEntry.path,
         fileName: vEntry.name,
@@ -350,20 +614,22 @@ class LibraryService {
       });
     }
 
-    // Duplicate detection (filename + size heuristics — no auto-delete, no content hash)
-    this.markDuplicates(newItems);
+    // Keep records that are still present, preserving metadata IDs; remove missing paths.
+    // Duplicate detection runs across the complete folder inventory, not just new files.
+    const otherFolderItems = this.items.filter((item) => item.folderId !== folderId);
+    const mergedFolderItems = scannedItems;
+    for (const item of mergedFolderItems) delete item.duplicateOfId;
+    this.markDuplicates([...otherFolderItems, ...mergedFolderItems]);
 
-    // Replace items for this folder
-    this.items = this.items.filter((i) => i.folderId !== folderId);
-    this.items.push(...newItems);
+    this.items = [...otherFolderItems, ...mergedFolderItems];
     folder.lastScannedAt = Date.now();
     await this.persistFolders();
     await this.persistItems();
 
     progress.status = 'completed';
-    progress.foundVideos = newItems.length;
+    progress.foundVideos = addedOrChangedCount;
     progress.foundSubtitles = subtitleEntries.length;
-    progress.duplicates = newItems.filter((i) => i.duplicateOfId).length;
+    progress.duplicates = mergedFolderItems.filter((i) => i.duplicateOfId).length;
     onProgress?.({ ...progress });
 
     this.scanCancellers.delete(folderId);
@@ -373,10 +639,10 @@ class LibraryService {
       startedAt,
       finishedAt: Date.now(),
       status: 'completed',
-      videoCount: newItems.length,
+      videoCount: addedOrChangedCount,
       subtitleCount: subtitleEntries.length,
-      duplicateCount: newItems.filter((i) => i.duplicateOfId).length,
-      needsReviewCount: newItems.filter((i) => i.identification === 'needs-review').length,
+      duplicateCount: mergedFolderItems.filter((i) => i.duplicateOfId).length,
+      needsReviewCount: mergedFolderItems.filter((i) => i.identification === 'needs-review').length,
     };
   }
 
@@ -427,9 +693,17 @@ class LibraryService {
     if (!folder) throw new Error('پوشه یافت نشد');
 
     const items = this.getItemsForFolder(folderId);
+    await getMetadataService().load();
     const operations: OrgOperation[] = [];
 
     for (const item of items) {
+      // A successful prior organization is authoritative: don't propose the same
+      // already-moved file again on subsequent scans.
+      const alreadyOrganized = this.log.some((entry) =>
+        entry.success && entry.type === 'move' && normalizePath(entry.destPath) === normalizePath(item.filePath),
+      );
+      if (alreadyOrganized) continue;
+
       // Skip episodes inside a series season folder (already organized in their series)
       if (item.mediaType === 'episode' || item.mediaType === 'series') {
         // For series, check if the file is loose (parent is the library root)
@@ -444,18 +718,29 @@ class LibraryService {
       );
       // If the file lives in a dedicated folder (folder name matches title), skip.
       const parentBaseName = fs.baseName(item.parentFolder).toLowerCase();
-      const titleGuess = (item.titleGuess || '').toLowerCase();
+      const metadata = getMetadataService().getMetadataForItem(item.id);
+      const knownTitles = [metadata?.persianTitle, metadata?.title, item.titleGuess]
+        .map((value) => value?.trim().toLowerCase() || '')
+        .filter(Boolean);
       const isDedicated =
         siblingsInSameFolder.length === 0 &&
-        titleGuess &&
-        (parentBaseName.includes(titleGuess) || titleGuess.includes(parentBaseName));
+        parentBaseName.length > 0 &&
+        knownTitles.some((title) => parentBaseName.includes(title) || title.includes(parentBaseName));
 
       if (isDedicated) continue;
 
-      // Propose a new folder
-      const folderName = buildFolderName(item.titleGuess || item.fileName, item.yearGuess);
+      // Prefer confirmed provider metadata; fall back to the conservative filename parser.
+      const canonicalTitle = metadata?.persianTitle?.trim() || metadata?.title?.trim() || item.titleGuess || item.fileName;
+      const canonicalYear = metadata?.year || item.yearGuess;
+      const folderName = buildFolderName(canonicalTitle, canonicalYear);
+      const safeTitle = buildFolderName(canonicalTitle);
+      const extension = item.extension ? `.${item.extension}` : '';
+      const canonicalBase = item.mediaType === 'episode' && item.seasonGuess && item.episodeGuess
+        ? `${safeTitle} - S${String(item.seasonGuess).padStart(2, '0')}E${String(item.episodeGuess).padStart(2, '0')}`
+        : folderName;
+      const proposedFileName = `${canonicalBase}${extension}`;
       const destFolderPath = fs.joinPath(folder.path, folderName);
-      const destFilePath = fs.joinPath(destFolderPath, item.fileName);
+      const destFilePath = fs.joinPath(destFolderPath, proposedFileName);
 
       const destFolderExists = await fs.exists(destFolderPath);
       const destFileExists = await fs.exists(destFilePath);
@@ -514,7 +799,9 @@ class LibraryService {
     const operations = proposal.operations.map((op) => {
       if (op.id !== operationId || op.excluded) return op;
       const destFolderPath = fs.joinPath(folder.path, newFolderName);
-      const destFilePath = fs.joinPath(destFolderPath, fs.baseName(op.sourcePath));
+      // Preserve the canonical filename already proposed by generateProposal.
+      // Editing only the destination folder must not revert the video to its old name.
+      const destFilePath = fs.joinPath(destFolderPath, fs.baseName(op.destFilePath));
       return {
         ...op,
         destFolderPath,
@@ -578,67 +865,85 @@ class LibraryService {
         }
       }
 
-      // Move the video file
+      // Treat the video and its sidecar subtitles as one transaction.
+      // Preflight every subtitle before moving anything: a missing source or an
+      // occupied destination must never leave the video separated from its subs.
+      const item = this.items.find((i) => i.id === op.itemId);
+      const sourceVideoName = fs.baseName(op.sourcePath);
+      const sourceVideoBase = sourceVideoName.slice(0, sourceVideoName.lastIndexOf('.'));
+      const destinationVideoName = fs.baseName(op.destFilePath);
+      const destinationVideoBase = destinationVideoName.slice(0, destinationVideoName.lastIndexOf('.'));
+      const subtitleMoves = op.relatedSubtitles.map((sub) => {
+        const sourceSubtitleName = fs.baseName(sub.filePath);
+        const sourceSubtitleBase = sourceSubtitleName.slice(0, sourceSubtitleName.lastIndexOf('.'));
+        const suffix = sourceSubtitleBase.toLowerCase().startsWith(sourceVideoBase.toLowerCase())
+          ? sourceSubtitleBase.slice(sourceVideoBase.length)
+          : '';
+        const subDestName = `${destinationVideoBase}${suffix}.${sub.extension}`;
+        return { sub, subDestName, subDestPath: fs.joinPath(op.destFolderPath, subDestName) };
+      });
+
+      let subtitlePreflightError: string | undefined;
+      for (const move of subtitleMoves) {
+        if (!(await fs.exists(move.sub.filePath))) {
+          subtitlePreflightError = `زیرنویس مبدأ یافت نشد: ${fs.baseName(move.sub.filePath)}`;
+          break;
+        }
+        if (await fs.exists(move.subDestPath)) {
+          subtitlePreflightError = `فایل زیرنویس مقصد از قبل وجود دارد: ${move.subDestName}`;
+          break;
+        }
+      }
+      if (subtitlePreflightError) {
+        failed.push({ operation: op, error: subtitlePreflightError });
+        this.addLog({ id: uid(), timestamp: Date.now(), type: 'move', sourcePath: op.sourcePath, destPath: op.destFilePath, success: false, error: subtitlePreflightError, proposalId: proposal.id });
+        continue;
+      }
+
+      const movedSubtitles: Array<{ sourcePath: string; destPath: string; subDestName: string }> = [];
+      let subtitleMoveError: string | undefined;
+      for (const move of subtitleMoves) {
+        const subResult = await fs.moveFile(move.sub.filePath, move.subDestPath);
+        if (!subResult.success) {
+          subtitleMoveError = subResult.error || `انتقال زیرنویس ناموفق بود: ${move.subDestName}`;
+          break;
+        }
+        movedSubtitles.push({ sourcePath: move.sub.filePath, destPath: move.subDestPath, subDestName: move.subDestName });
+      }
+
+      if (subtitleMoveError) {
+        for (const moved of movedSubtitles.reverse()) {
+          await fs.moveFile(moved.destPath, moved.sourcePath);
+        }
+        failed.push({ operation: op, error: subtitleMoveError });
+        this.addLog({ id: uid(), timestamp: Date.now(), type: 'move', sourcePath: op.sourcePath, destPath: op.destFilePath, success: false, error: subtitleMoveError, proposalId: proposal.id });
+        continue;
+      }
+
+      // Move the video only after all subtitles have moved successfully.
       const result = await fs.moveFile(op.sourcePath, op.destFilePath);
       if (!result.success) {
+        for (const moved of movedSubtitles.reverse()) {
+          await fs.moveFile(moved.destPath, moved.sourcePath);
+        }
         failed.push({ operation: op, error: result.error || 'انتقال ناموفق بود' });
-        this.addLog({
-          id: uid(),
-          timestamp: Date.now(),
-          type: 'move',
-          sourcePath: op.sourcePath,
-          destPath: op.destFilePath,
-          success: false,
-          error: result.error,
-          proposalId: proposal.id,
-        });
+        this.addLog({ id: uid(), timestamp: Date.now(), type: 'move', sourcePath: op.sourcePath, destPath: op.destFilePath, success: false, error: result.error, proposalId: proposal.id });
         continue;
       }
 
       succeeded.push(op);
-      this.addLog({
-        id: uid(),
-        timestamp: Date.now(),
-        type: 'move',
-        sourcePath: op.sourcePath,
-        destPath: op.destFilePath,
-        success: true,
-        proposalId: proposal.id,
-      });
-
-      // Move related subtitles alongside
-      for (const sub of op.relatedSubtitles) {
-        const subDestPath = fs.joinPath(op.destFolderPath, sub.fileName);
-        if (await fs.exists(subDestPath)) {
-          this.addLog({
-            id: uid(),
-            timestamp: Date.now(),
-            type: 'move',
-            sourcePath: sub.filePath,
-            destPath: subDestPath,
-            success: false,
-            error: 'زیرنویس مقصد از قبل وجود دارد',
-            proposalId: proposal.id,
-          });
-          continue;
-        }
-        const subResult = await fs.moveFile(sub.filePath, subDestPath);
-        this.addLog({
-          id: uid(),
-          timestamp: Date.now(),
-          type: 'move',
-          sourcePath: sub.filePath,
-          destPath: subDestPath,
-          success: subResult.success,
-          error: subResult.error,
-          proposalId: proposal.id,
-        });
+      this.addLog({ id: uid(), timestamp: Date.now(), type: 'move', sourcePath: op.sourcePath, destPath: op.destFilePath, success: true, proposalId: proposal.id });
+      for (const moved of movedSubtitles) {
+        this.addLog({ id: uid(), timestamp: Date.now(), type: 'move', sourcePath: moved.sourcePath, destPath: moved.destPath, success: true, proposalId: proposal.id });
+        const tracked = item?.subtitles.find((entry) => entry.filePath === moved.sourcePath);
+        if (tracked) { tracked.filePath = moved.destPath; tracked.fileName = moved.subDestName; }
       }
 
-      // Update the in-memory item to reflect the new path
-      const item = this.items.find((i) => i.id === op.itemId);
+      // Update the in-memory item to reflect the new path only after the whole
+      // video/subtitle group has completed successfully.
       if (item) {
         item.filePath = op.destFilePath;
+        item.fileName = destinationVideoName;
         item.parentFolder = op.destFolderPath;
       }
     }
@@ -705,12 +1010,28 @@ class LibraryService {
     if (item) {
       item.filePath = entry.sourcePath;
       item.parentFolder = fs.parentPath(entry.sourcePath);
+    }
+    for (const current of this.items) {
+      current.subtitles = current.subtitles.map((subtitle) => subtitle.filePath === entry.destPath
+        ? { ...subtitle, filePath: entry.sourcePath, fileName: fs.baseName(entry.sourcePath) }
+        : subtitle);
+    }
+    if (item || this.items.some((current) => current.subtitles.some((subtitle) => subtitle.filePath === entry.sourcePath))) {
       await this.persistItems();
     }
 
     await this.persistLog();
     return { success: true };
   }
+}
+
+function normalizePath(path: string): string {
+  return path.replace(/\\/g, '/').replace(/\/+$/, '').toLocaleLowerCase();
+}
+
+function stripExtension(fileName: string): string {
+  const dot = fileName.lastIndexOf('.');
+  return dot > 0 ? fileName.slice(0, dot) : fileName;
 }
 
 function validateRenameName(value: string | undefined, extension: string, label: string): string {

@@ -44,6 +44,10 @@ export interface PlaybackPreferences {
 export interface DesktopBridge {
   readonly isDesktop: true;
 
+  // --- Artwork download ---
+  /** Fetch a remote artwork image in Electron's main process, bypassing renderer CORS. */
+  downloadImage(url: string): Promise<string | null>;
+
   // --- Filesystem (delegated to ElectronFilesystemService) ---
   listDir(path: string): Promise<import('./filesystem').DirEntry[]>;
   scanDir(
@@ -58,6 +62,8 @@ export interface DesktopBridge {
   writeTextFile(path: string, content: string): Promise<{ success: boolean; error?: string }>;
   downloadFile(url: string, destPath: string): Promise<{ success: boolean; error?: string }>;
   isSymlink(path: string): Promise<boolean>;
+  /** Safely remove a strictly-empty child directory, never the selected root. */
+  removeEmptyDirectory(path: string, selectedRoot: string): Promise<{ success: boolean; error?: string }>; 
   normalizePath(path: string): Promise<string>;
   joinPath(...segments: string[]): Promise<string>;
   parentPath(path: string): Promise<string>;

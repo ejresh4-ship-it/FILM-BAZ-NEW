@@ -55,33 +55,56 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
+
+// Download remote artwork in Electron's main process. This avoids renderer CORS
+// restrictions while keeping filesystem access out of the renderer.
+ipcMain.handle('images:download', async (_evt, imageUrl: string): Promise<string | null> => {
+  try {
+    if (typeof imageUrl !== 'string' || imageUrl.length > 4096) return null;
+    const parsed = new URL(imageUrl);
+    if (!['http:', 'https:'].includes(parsed.protocol)) return null;
+    const host = parsed.hostname.toLowerCase();
+    if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')
+      || host === '::1' || host.startsWith('127.') || host.startsWith('10.')
+      || host.startsWith('192.168.') || /^172\.(1[6-9]|2[0-9]|3[01])\./.test(host)
+      || host === '0.0.0.0' || host === '169.254.169.254') return null;
+    const response = await fetch(parsed.toString(), {
+      headers: { 'User-Agent': 'FILM-BAZ/1.0 (artwork cache)' },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!response.ok) return null;
+    const contentType = (response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+    if (!contentType.startsWith('image/') || contentType === 'image/svg+xml') return null;
+    const declaredLength = Number(response.headers.get('content-length') || 0);
+    if (declaredLength > 12 * 1024 * 1024) return null;
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (!bytes.length || bytes.length > 12 * 1024 * 1024) return null;
+    return `data:${contentType};base64,${bytes.toString('base64')}`;
+  } catch {
+    return null;
+  }
+});
+
 // --- IPC: Filesystem operations ---
 
 ipcMain.handle('fs:listDir', async (_evt, dirPath: string): Promise<DirEntry[]> => {
-  try {
-    const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
-    const results: DirEntry[] = [];
-    for (const entry of entries) {
-      let stat: fs.Stats | null = null;
-      try {
-        stat = await fs.promises.stat(path.join(dirPath, entry.name));
-      } catch {
-        // skip entries we can't stat (permission issues)
-      }
-      results.push({
-        name: entry.name,
-        path: path.join(dirPath, entry.name),
-        isDirectory: entry.isDirectory(),
-        isFile: entry.isFile(),
-        isSymlink: entry.isSymbolicLink(),
-        size: stat?.size ?? 0,
-        lastModified: stat?.mtimeMs ?? 0,
-      });
-    }
-    return results;
-  } catch {
-    return [];
+  // Fail closed: permission/stat errors must never look like an empty directory.
+  const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
+  const results: DirEntry[] = [];
+  for (const entry of entries) {
+    const fullPath = path.join(dirPath, entry.name);
+    const stat = await fs.promises.lstat(fullPath);
+    results.push({
+      name: entry.name,
+      path: fullPath,
+      isDirectory: stat.isDirectory() && !stat.isSymbolicLink(),
+      isFile: stat.isFile(),
+      isSymlink: stat.isSymbolicLink(),
+      size: stat.size,
+      lastModified: stat.mtimeMs,
+    });
   }
+  return results;
 });
 
 ipcMain.handle('fs:scanDir', async (
@@ -254,6 +277,51 @@ ipcMain.handle('fs:parentPath', async (_evt, p: string): Promise<string> => {
 
 ipcMain.handle('fs:baseName', async (_evt, p: string): Promise<string> => {
   return path.basename(p);
+});
+
+
+
+// Remove one strictly-empty child directory. Never recursive: rmdir only succeeds
+// for an empty directory. The selected library root itself is never removable.
+ipcMain.handle('fs:removeEmptyDirectory', async (_evt, targetPath: string, selectedRoot: string): Promise<{ success: boolean; error?: string }> => {
+  try {
+    if (typeof targetPath !== 'string' || typeof selectedRoot !== 'string' || !path.isAbsolute(targetPath) || !path.isAbsolute(selectedRoot)) {
+      return { success: false, error: 'مسیر نامعتبر است' };
+    }
+    const root = path.resolve(selectedRoot);
+    const target = path.resolve(targetPath);
+    const relative = path.relative(root, target);
+    if (!relative || relative === '.' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) {
+      return { success: false, error: 'فقط زیرپوشه‌های مسیر آرشیو قابل حذف هستند؛ پوشه اصلی محافظت می‌شود' };
+    }
+    const rootStat = await fs.promises.lstat(root);
+    if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
+      return { success: false, error: 'مسیر اصلی آرشیو پوشه معتبر و امنی نیست' };
+    }
+    const targetStat = await fs.promises.lstat(target);
+    if (!targetStat.isDirectory() || targetStat.isSymbolicLink()) {
+      return { success: false, error: 'مسیر انتخاب‌شده پوشه عادی نیست یا پیوند نمادین است' };
+    }
+    const realRoot = await fs.promises.realpath(root);
+    const realTarget = await fs.promises.realpath(target);
+    const realRelative = path.relative(realRoot, realTarget);
+    if (!realRelative || realRelative.startsWith('..' + path.sep) || path.isAbsolute(realRelative)) {
+      return { success: false, error: 'مسیر واقعی پوشه خارج از آرشیو است' };
+    }
+    const entries = await fs.promises.readdir(target);
+    if (entries.length !== 0) {
+      return { success: false, error: 'پوشه دیگر خالی نیست؛ هیچ فایلی حذف نشد' };
+    }
+    // Re-check immediately before rmdir to reduce the scan/delete race window.
+    const finalStat = await fs.promises.lstat(target);
+    if (!finalStat.isDirectory() || finalStat.isSymbolicLink() || (await fs.promises.readdir(target)).length !== 0) {
+      return { success: false, error: 'وضعیت پوشه تغییر کرده است؛ عملیات لغو شد' };
+    }
+    await fs.promises.rmdir(target);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : String(e) };
+  }
 });
 
 // --- IPC: Player discovery ---

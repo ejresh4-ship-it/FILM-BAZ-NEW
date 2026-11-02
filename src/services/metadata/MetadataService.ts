@@ -22,6 +22,9 @@ import type { MediaItem } from '@/types/media-library';
 import { idbGet, idbSet } from '@/services/idbStore';
 import { TMDbProvider } from './TMDbProvider';
 import { OMDbProvider } from './OMDbProvider';
+import { WikidataProvider } from './WikidataProvider';
+import { MediaWikiProvider } from './MediaWikiProvider';
+import { TVmazeProvider } from './TVmazeProvider';
 import type { MetadataProvider } from './MetadataProvider';
 import { getAIService } from '@/services/ai/AIService';
 
@@ -29,7 +32,7 @@ const META_CACHE_KEY = 'film-baz:metadata-cache';
 const PROVIDER_CONFIG_KEY = 'film-baz:provider-configs';
 const LOOKUP_MODE_KEY = 'film-baz:lookup-mode';
 
-const DEFAULT_PROVIDERS: ProviderConfig[] = [
+const BUILTIN_PROVIDERS: ProviderConfig[] = [
   {
     id: 'tmdb',
     name: 'TMDb (The Movie Database)',
@@ -54,6 +57,18 @@ const DEFAULT_PROVIDERS: ProviderConfig[] = [
     supportsImages: false,
     supportsPersianTitles: false,
   },
+  {
+    id: 'wikidata', name: 'Wikidata', type: 'wikidata', enabled: true, priority: 3,
+    supportsMovies: true, supportsSeries: true, supportsImages: true, supportsPersianTitles: true,
+  },
+  {
+    id: 'mediawiki', name: 'Wikipedia / MediaWiki', type: 'mediawiki', enabled: true, priority: 4,
+    supportsMovies: true, supportsSeries: true, supportsImages: true, supportsPersianTitles: true,
+  },
+  {
+    id: 'tvmaze', name: 'TVmaze', type: 'tvmaze', enabled: true, priority: 5,
+    supportsMovies: false, supportsSeries: true, supportsImages: true, supportsPersianTitles: false,
+  },
 ];
 
 class MetadataService {
@@ -68,6 +83,9 @@ class MetadataService {
     // Register built-in providers
     this.providers.set('tmdb', new TMDbProvider());
     this.providers.set('omdb', new OMDbProvider());
+    this.providers.set('wikidata', new WikidataProvider());
+    this.providers.set('mediawiki', new MediaWikiProvider());
+    this.providers.set('tvmaze', new TVmazeProvider());
   }
 
   async load(): Promise<void> {
@@ -77,7 +95,8 @@ class MetadataService {
       idbGet<LookupMode>(LOOKUP_MODE_KEY),
       idbGet<CachedMetadataEntry[]>(META_CACHE_KEY),
     ]);
-    this.configs = configs ?? DEFAULT_PROVIDERS;
+    const saved = configs ?? [];
+    this.configs = [...saved, ...BUILTIN_PROVIDERS.filter((builtin) => !saved.some((item) => item.id === builtin.id))];
     this.lookupMode = mode ?? 'combined';
     if (cacheEntries) {
       for (const entry of cacheEntries) {
@@ -189,6 +208,7 @@ class MetadataService {
   ): Promise<MatchCandidate[]> {
     await this.load();
     const query = item.titleGuess || stripExtension(item.fileName);
+    const mediaType = item.mediaType === 'episode' ? 'series' : item.mediaType === 'unknown' ? 'movie' : item.mediaType;
     const providers = this.getEnabledProviders();
 
     if (providers.length === 0) {
@@ -197,7 +217,7 @@ class MetadataService {
 
     const results = await Promise.allSettled(
       providers.map(({ provider, config }) =>
-        provider.search(query, item.yearGuess, item.mediaType, config, signal),
+        provider.search(query, item.yearGuess, mediaType, config, signal),
       ),
     );
 
@@ -227,7 +247,10 @@ class MetadataService {
     await this.load();
     // Find the provider config whose name matches the candidate's providerName,
     // then resolve the registered adapter instance by its config id.
-    const config = this.configs.find((c) => c.id === candidate.providerId) || this.configs.find((c) => c.name === candidate.providerName);
+    const config = this.configs.find((c) => c.id === candidate.providerId)
+      || this.configs.find((c) => c.id === candidate.providerName.toLowerCase())
+      || this.configs.find((c) => candidate.providerName.toLowerCase().includes(c.id.toLowerCase()))
+      || this.configs.find((c) => c.name.toLowerCase().startsWith(candidate.providerName.toLowerCase()));
     const providerInstance = config ? this.providers.get(config.id) : undefined;
 
     if (!providerInstance || !config) {
@@ -242,6 +265,7 @@ class MetadataService {
 
     metadata.matchedItemId = itemId;
     metadata.cachedAt = Date.now();
+    if (metadata.rating > 0 && !metadata.ratingSource) metadata.ratingSource = metadata.providerName;
 
     // Auto-translate title to Persian if AI is configured and no Persian title yet
     if (!metadata.persianTitle) {
@@ -258,11 +282,115 @@ class MetadataService {
       }
     }
 
+    if (metadata.overview && metadata.overviewLanguage !== 'fa') {
+      try {
+        const ai = getAIService();
+        if (ai.isConfigured()) {
+          const translatedOverview = await ai.translate(metadata.overview);
+          if (translatedOverview && translatedOverview !== metadata.overview) {
+            metadata.overview = translatedOverview;
+            metadata.overviewLanguage = 'fa';
+          }
+        }
+      } catch {
+        // Keep the original synopsis if translation is unavailable.
+      }
+    }
+
     this.cache.set(metadata.id, metadata);
     this.itemToMetadata.set(itemId, metadata.id);
     await this.persistCache();
 
     return metadata;
+  }
+
+
+  /**
+   * Automatically enrich a library item from all enabled compatible providers.
+   * Low-confidence matches are never accepted. Existing manual corrections are preserved.
+   */
+  async enrichItem(item: MediaItem, signal?: AbortSignal): Promise<MovieMetadata | null> {
+    await this.load();
+    const existing = this.getMetadataForItem(item.id);
+    if (existing?.manuallyCorrected) return existing;
+    const candidates = await this.searchCandidates(item, signal);
+    const ranked = candidates.filter((candidate) => candidate.matchScore >= 65)
+      .sort((a, b) => b.matchScore - a.matchScore);
+    const providerSeen = new Set<string>();
+    const uniqueRanked = ranked.filter((candidate) => {
+      const key = candidate.providerName.toLowerCase();
+      if (providerSeen.has(key)) return false;
+      providerSeen.add(key);
+      return true;
+    });
+    if (!uniqueRanked.length) return null;
+
+    const fetched: MovieMetadata[] = [];
+    for (const candidate of uniqueRanked.slice(0, 4)) {
+      if (signal?.aborted) throw new DOMException('لغو شد', 'AbortError');
+      try {
+        const metadata = await this.fetchAndCache(candidate, item.id, signal);
+        if (metadata) fetched.push(metadata);
+      } catch {
+        // A provider failure must not prevent fallback to the next source.
+      }
+      if (fetched.length >= 4) break;
+    }
+    if (!fetched.length) return null;
+    const primary = fetched[0];
+    const merged: MovieMetadata = { ...primary, cast: [...primary.cast], genres: [...primary.genres] };
+    for (const extra of fetched.slice(1)) {
+      if (extra.rating > 0 && (!(merged.rating > 0) || (extra.voteCount ?? 0) > (merged.voteCount ?? 0))) {
+        merged.rating = extra.rating;
+        merged.voteCount = extra.voteCount;
+        merged.ratingSource = extra.providerName;
+      }
+      if (extra.overview && (!merged.overview || (extra.overviewLanguage === 'fa' && merged.overviewLanguage !== 'fa'))) {
+        merged.overview = extra.overview;
+        merged.overviewLanguage = extra.overviewLanguage;
+      }
+      if (!merged.persianTitle && extra.persianTitle) merged.persianTitle = extra.persianTitle;
+      if (!merged.director && extra.director) merged.director = extra.director;
+      if (!merged.posterUrl && extra.posterUrl) merged.posterUrl = extra.posterUrl;
+      if (!merged.backdropUrl && extra.backdropUrl) merged.backdropUrl = extra.backdropUrl;
+      merged.genres = [...new Set([...merged.genres, ...extra.genres])];
+      const known = new Set(merged.cast.map((person) => person.name.toLowerCase()));
+      merged.cast.push(...extra.cast.filter((person) => !known.has(person.name.toLowerCase())));
+      if (!merged.seasons?.length && extra.seasons?.length) merged.seasons = extra.seasons;
+      if (!merged.episodes?.length && extra.episodes?.length) merged.episodes = extra.episodes;
+      if (!merged.numberOfSeasons && extra.numberOfSeasons) merged.numberOfSeasons = extra.numberOfSeasons;
+      if (!merged.numberOfEpisodes && extra.numberOfEpisodes) merged.numberOfEpisodes = extra.numberOfEpisodes;
+    }
+    merged.cast = merged.cast.slice(0, 10);
+    merged.matchedItemId = item.id;
+    merged.cachedAt = Date.now();
+    this.cache.set(merged.id, merged);
+    this.itemToMetadata.set(item.id, merged.id);
+    await this.persistCache();
+    return merged;
+  }
+
+  /** Process a list sequentially to respect public API rate limits. */
+  async enrichItems(
+    items: MediaItem[],
+    onProgress?: (progress: { completed: number; total: number; current: string; succeeded: number; failed: number }) => void,
+    signal?: AbortSignal,
+  ): Promise<{ succeeded: string[]; failed: Array<{ itemId: string; fileName: string; reason: string }> }> {
+    const succeeded: string[] = [];
+    const failed: Array<{ itemId: string; fileName: string; reason: string }> = [];
+    for (let index = 0; index < items.length; index += 1) {
+      if (signal?.aborted) break;
+      const item = items[index];
+      try {
+        const result = await this.enrichItem(item, signal);
+        if (result) succeeded.push(item.id);
+        else failed.push({ itemId: item.id, fileName: item.fileName, reason: 'تطابق مطمئن پیدا نشد' });
+      } catch (error) {
+        failed.push({ itemId: item.id, fileName: item.fileName, reason: error instanceof Error ? error.message : 'خطای نامشخص' });
+      }
+      onProgress?.({ completed: index + 1, total: items.length, current: item.fileName, succeeded: succeeded.length, failed: failed.length });
+    }
+    return { succeeded, failed };
   }
 
   // --- Cache access ---
@@ -364,7 +492,7 @@ class MetadataService {
 
   /** Check whether any enabled provider has a real API key configured. */
   isMockMode(): boolean {
-    return !this.configs.some((c) => c.enabled && c.apiKey && c.apiKey.trim().length > 0);
+    return !this.configs.some((c) => c.enabled && (['wikidata', 'mediawiki', 'tvmaze'].includes(c.id) || (c.apiKey && c.apiKey.trim().length > 0)));
   }
 }
 
