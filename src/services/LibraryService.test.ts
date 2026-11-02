@@ -107,6 +107,9 @@ describe('LibraryService — folder organization', () => {
     expect(updated?.subtitles[0]?.fileName).toBe('FILM BAZ Final Batch Name (2040).fa.srt');
     expect(updated && await fs.exists(updated.filePath)).toBe(true);
     expect(updated && await fs.exists(updated.subtitles[0].filePath)).toBe(true);
+    const moveLog = svc.getOperationLog().filter((entry) => entry.type === 'move' && entry.success);
+    expect(moveLog.find((entry) => entry.sourcePath === videoPath)?.destPath).toBe(updated?.filePath);
+    expect(moveLog.find((entry) => entry.sourcePath === subtitlePath)?.destPath).toBe(updated?.subtitles[0]?.filePath);
   });
 
   it('detects duplicate candidates', async () => {
