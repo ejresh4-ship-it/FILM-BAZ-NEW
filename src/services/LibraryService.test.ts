@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { getLibraryService } from './LibraryService';
+import { getFilesystemService } from './filesystemFactory';
 
 vi.mock('@/services/idbStore', () => ({
   idbGet: vi.fn().mockResolvedValue(null),
@@ -68,6 +69,43 @@ describe('LibraryService — folder organization', () => {
     expect(result.succeeded.length + result.failed.length).toBe(
       proposal.operations.filter((o) => !o.excluded).length,
     );
+  });
+
+  it('batch finalization renames the folder, video, and matching subtitles together', async () => {
+    const folder = svc.getFolders()[0] ?? (await svc.addFolder('C:\\Films'));
+    const fs = getFilesystemService();
+    const videoName = 'FilmBazBatchRename2040.mkv';
+    const subtitleName = 'FilmBazBatchRename2040.fa.srt';
+    const videoPath = fs.joinPath(folder.path, videoName);
+    const subtitlePath = fs.joinPath(folder.path, subtitleName);
+    await fs.writeTextFile(videoPath, 'video');
+    await fs.writeTextFile(subtitlePath, 'subtitle');
+
+    await svc.scanFolder(folder.id);
+    const item = svc.getItemsForFolder(folder.id).find((candidate) => candidate.fileName === videoName);
+    expect(item).toBeTruthy();
+    expect(item?.subtitles).toHaveLength(1);
+
+    const proposal = await svc.generateProposal(folder.id);
+    const operation = proposal.operations.find((candidate) => candidate.itemId === item?.id);
+    expect(operation).toBeTruthy();
+    if (!item || !operation) return;
+
+    const execution = await svc.executeProposal({ ...proposal, operations: [operation] });
+    expect(execution.succeeded).toHaveLength(1);
+
+    // Simulate a corrected title arriving after the organize/move step.
+    item.titleGuess = 'FILM BAZ Final Batch Name';
+    const renameResult = await svc.renameOrganizedItemsBatch([item.id]);
+    expect(renameResult.failed).toHaveLength(0);
+    expect(renameResult.succeeded).toHaveLength(1);
+
+    const updated = svc.getItems().find((candidate) => candidate.id === item.id);
+    expect(updated?.fileName).toBe('FILM BAZ Final Batch Name (2040).mkv');
+    expect(updated?.parentFolder).toContain('FILM BAZ Final Batch Name (2040)');
+    expect(updated?.subtitles[0]?.fileName).toBe('FILM BAZ Final Batch Name (2040).fa.srt');
+    expect(updated && await fs.exists(updated.filePath)).toBe(true);
+    expect(updated && await fs.exists(updated.subtitles[0].filePath)).toBe(true);
   });
 
   it('detects duplicate candidates', async () => {
