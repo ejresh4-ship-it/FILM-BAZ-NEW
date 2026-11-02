@@ -713,6 +713,7 @@ class LibraryService {
         .filter(Boolean);
       const isDedicated =
         siblingsInSameFolder.length === 0 &&
+        parentBaseName.length > 0 &&
         knownTitles.some((title) => parentBaseName.includes(title) || title.includes(parentBaseName));
 
       if (isDedicated) continue;
