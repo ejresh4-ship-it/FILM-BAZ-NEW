@@ -719,7 +719,7 @@ class LibraryService {
 
       // Prefer confirmed provider metadata; fall back to the conservative filename parser.
       const metadata = getMetadataService().getMetadataForItem(item.id);
-      const canonicalTitle = metadata?.title?.trim() || item.titleGuess || item.fileName;
+      const canonicalTitle = metadata?.persianTitle?.trim() || metadata?.title?.trim() || item.titleGuess || item.fileName;
       const canonicalYear = metadata?.year || item.yearGuess;
       const folderName = buildFolderName(canonicalTitle, canonicalYear);
       const extension = item.extension ? `.${item.extension}` : '';
