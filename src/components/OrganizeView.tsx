@@ -179,8 +179,9 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
           const canonicalTitle = metadata?.persianTitle?.trim() || metadata?.title?.trim() || item.titleGuess?.trim();
           if (canonicalTitle) {
             const canonicalFolder = buildFolderName(canonicalTitle, metadata?.year || item.yearGuess);
+            const safeTitle = buildFolderName(canonicalTitle);
             const fileBase = item.mediaType === 'episode' && item.seasonGuess && item.episodeGuess
-              ? canonicalTitle + ' - S' + String(item.seasonGuess).padStart(2, '0') + 'E' + String(item.episodeGuess).padStart(2, '0')
+              ? safeTitle + ' - S' + String(item.seasonGuess).padStart(2, '0') + 'E' + String(item.episodeGuess).padStart(2, '0')
               : canonicalFolder;
             const canonicalFileName = fileBase + (item.extension ? '.' + item.extension : '');
             try {
@@ -259,6 +260,9 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
         setFinalizeFailures([...failures]);
       }
       notifyLibraryUpdated();
+    } catch (error) {
+      failures.push(error instanceof Error ? error.message : 'خطای کلی در تکمیل فایل‌های موفق');
+      setFinalizeFailures([...failures]);
     } finally {
       setFinalizeBusy(false);
     }
