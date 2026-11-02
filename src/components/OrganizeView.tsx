@@ -19,6 +19,7 @@ import { toPersianDigits } from '@/lib/movieUtils';
 import { getFilesystemService } from '@/services/filesystemFactory';
 import { getMetadataService } from '@/services/metadata/MetadataService';
 import { notifyLibraryUpdated } from '@/services/libraryEvents';
+import { buildFolderName } from '@/lib/fileParsing';
 
 interface OrganizeViewProps {
   folderId: string;
@@ -39,9 +40,11 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
   const [metadataBusy, setMetadataBusy] = useState(false);
   const [metadataProgress, setMetadataProgress] = useState({ completed: 0, total: 0, current: '', succeeded: 0, failed: 0 });
   const [metadataFailures, setMetadataFailures] = useState<Array<{ fileName: string; reason: string }>>([]);
-  const [offlineBusy, setOfflineBusy] = useState(false);
-  const [offlineProgress, setOfflineProgress] = useState({ completed: 0, total: 0, succeeded: 0, failed: 0 });
-  const [offlineFailures, setOfflineFailures] = useState<string[]>([]);
+  const [finalizeBusy, setFinalizeBusy] = useState(false);
+  const [finalizeProgress, setFinalizeProgress] = useState({
+    completed: 0, total: 0, namesSynced: 0, nameFailures: 0, offlineSaved: 0, offlineFailures: 0,
+  });
+  const [finalizeFailures, setFinalizeFailures] = useState<string[]>([]);
   const [selectionMode, setSelectionMode] = useState<'all' | 'safe' | 'none'>('all');
 
   useEffect(() => {
@@ -137,55 +140,128 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
     }
   }
 
-  async function saveOrganizedFilesOffline() {
-    if (!execResult || offlineBusy) return;
-    const metadataService = getMetadataService();
-    const items = service.getItems();
+  async function finalizeSuccessfulFiles() {
+    if (!execResult || finalizeBusy) return;
     const completed = execResult.succeeded;
     if (completed.length === 0) return;
-    if (!window.confirm(`اطلاعات و تصاویر ${toPersianDigits(completed.length)} فایل سازمان‌دهی‌شده کنار ویدئوها ذخیره شود؟ فایل‌های جانبی موجود بازنویسی نمی‌شوند.`)) return;
-    setOfflineBusy(true);
-    setOfflineFailures([]);
-    setOfflineProgress({ completed: 0, total: completed.length, succeeded: 0, failed: 0 });
-    let succeeded = 0;
-    let failed = 0;
+
+    if (!window.confirm(
+      'برای همه موارد موفق، نام پوشه، فیلم و زیرنویس‌ها با اطلاعات شناسایی‌شده هماهنگ شود و اطلاعات و تصاویر آفلاین کنار ویدئو ذخیره شود؟ فایل‌های مقصد موجود بازنویسی نمی‌شوند.'
+    )) return;
+
+    const metadataService = getMetadataService();
+    setFinalizeBusy(true);
+    setFinalizeFailures([]);
+    setFinalizeProgress({
+      completed: 0, total: completed.length, namesSynced: 0, nameFailures: 0, offlineSaved: 0, offlineFailures: 0,
+    });
+
+    let namesSynced = 0;
+    let nameFailures = 0;
+    let offlineSaved = 0;
+    let offlineFailures = 0;
     const failures: string[] = [];
-    for (let index = 0; index < completed.length; index += 1) {
-      const op = completed[index];
-      const item = items.find((entry) => entry.id === op.itemId);
-      const metadata = metadataService.getMetadataForItem(op.itemId);
-      try {
-        if (!item || !metadata) throw new Error('اطلاعات متادیتا برای این فایل موجود نیست');
-        const videoName = fs.baseName(item.filePath);
-        const base = videoName.slice(0, videoName.lastIndexOf('.')) || videoName;
-        const jsonPath = fs.joinPath(item.parentFolder, `${base}.film-baz.json`);
-        if (await fs.exists(jsonPath)) throw new Error('فایل اطلاعات جانبی از قبل وجود دارد');
-        const savedImages: string[] = [];
-        const images = [
-          { label: 'poster', url: metadata.posterUrl },
-          { label: 'backdrop', url: metadata.backdropUrl },
-          ...metadata.cast.map((person, personIndex) => ({ label: `cast-${String(personIndex + 1).padStart(2, '0')}`, url: person.photoUrl })),
-        ].filter((entry): entry is { label: string; url: string } => Boolean(entry.url));
-        for (const image of images) {
-          const extensionMatch = image.url.match(/\.(jpe?g|png|webp)(?:[?#]|$)/i);
-          const extension = extensionMatch?.[1]?.toLowerCase() || 'jpg';
-          const imagePath = fs.joinPath(item.parentFolder, `${base}.${image.label}.${extension}`);
-          if (await fs.exists(imagePath)) continue;
-          const result = await fs.downloadFile(image.url, imagePath);
-          if (result.success) savedImages.push(fs.baseName(imagePath));
-          else failures.push(`${videoName}: دانلود تصویر ${image.label} ناموفق بود`);
+
+    try {
+      await metadataService.load();
+      for (let index = 0; index < completed.length; index += 1) {
+        const operation = completed[index];
+        let item = service.getItems().find((entry) => entry.id === operation.itemId);
+        const metadata = metadataService.getMetadataForItem(operation.itemId);
+
+        if (!item) {
+          nameFailures += 1;
+          offlineFailures += 1;
+          failures.push(fs.baseName(operation.destFilePath) + ': فایل در کتابخانه پیدا نشد');
+        } else {
+          // Keep naming consistent with the title/year used by the organizer.
+          // Episodes retain their season/episode identifier in the filename.
+          const canonicalTitle = metadata?.title?.trim() || item.titleGuess?.trim();
+          if (canonicalTitle) {
+            const canonicalFolder = buildFolderName(canonicalTitle, metadata?.year || item.yearGuess);
+            const fileBase = item.mediaType === 'episode' && item.seasonGuess && item.episodeGuess
+              ? canonicalTitle + ' - S' + String(item.seasonGuess).padStart(2, '0') + 'E' + String(item.episodeGuess).padStart(2, '0')
+              : canonicalFolder;
+            const canonicalFileName = fileBase + (item.extension ? '.' + item.extension : '');
+            try {
+              await service.renameItem(item.id, {
+                mode: 'both',
+                folderName: canonicalFolder,
+                fileName: canonicalFileName,
+              });
+              namesSynced += 1;
+            } catch (error) {
+              nameFailures += 1;
+              failures.push(item.fileName + ': تغییر نام پوشه/فیلم/زیرنویس انجام نشد؛ ' +
+                (error instanceof Error ? error.message : 'خطای نامشخص'));
+            }
+          } else {
+            nameFailures += 1;
+            failures.push(item.fileName + ': عنوان مطمئن برای تغییر نام پیدا نشد؛ نام فعلی حفظ شد');
+          }
+
+          // Refresh the item after a possible folder/file rename so sidecars are
+          // written beside the actual video path.
+          item = service.getItems().find((entry) => entry.id === operation.itemId);
+          try {
+            if (!item || !metadata) throw new Error('اطلاعات متادیتا برای این فایل موجود نیست');
+
+            const videoName = fs.baseName(item.filePath);
+            const dot = videoName.lastIndexOf('.');
+            const base = dot > 0 ? videoName.slice(0, dot) : videoName;
+            const jsonPath = fs.joinPath(item.parentFolder, base + '.film-baz.json');
+            const sidecarAlreadyExists = await fs.exists(jsonPath);
+            const savedImages: string[] = [];
+            const images = [
+              { label: 'poster', url: metadata.posterUrl },
+              { label: 'backdrop', url: metadata.backdropUrl },
+              ...metadata.cast.map((person, personIndex) => ({
+                label: 'cast-' + String(personIndex + 1).padStart(2, '0'),
+                url: person.photoUrl,
+              })),
+            ].filter((entry): entry is { label: string; url: string } => Boolean(entry.url));
+
+            for (const image of images) {
+              const extensionMatch = image.url.match(/\.(jpe?g|png|webp)(?:[?#]|$)/i);
+              const extension = extensionMatch?.[1]?.toLowerCase() || 'jpg';
+              const imagePath = fs.joinPath(item.parentFolder, base + '.' + image.label + '.' + extension);
+              if (await fs.exists(imagePath)) {
+                savedImages.push(fs.baseName(imagePath));
+                continue;
+              }
+              const result = await fs.downloadFile(image.url, imagePath);
+              if (result.success) savedImages.push(fs.baseName(imagePath));
+              else failures.push(videoName + ': دانلود تصویر ' + image.label + ' ناموفق بود');
+            }
+
+            if (!sidecarAlreadyExists) {
+              const sidecar = { ...metadata, offlineAssets: savedImages, exportedAt: new Date().toISOString() };
+              await fs.writeTextFile(jsonPath, JSON.stringify(sidecar, null, 2));
+            } else {
+              failures.push(videoName + ': فایل اطلاعات آفلاین از قبل موجود بود و بازنویسی نشد');
+            }
+            offlineSaved += 1;
+          } catch (error) {
+            offlineFailures += 1;
+            failures.push((item ? fs.baseName(item.filePath) : fs.baseName(operation.destFilePath)) + ': ' +
+              (error instanceof Error ? error.message : 'خطای ذخیره‌سازی آفلاین'));
+          }
         }
-        const sidecar = { ...metadata, offlineAssets: savedImages, exportedAt: new Date().toISOString() };
-        await fs.writeTextFile(jsonPath, JSON.stringify(sidecar, null, 2));
-        succeeded += 1;
-      } catch (error) {
-        failed += 1;
-        failures.push(`${fs.baseName(op.destFilePath)}: ${error instanceof Error ? error.message : 'خطای ذخیره‌سازی'}`);
+
+        setFinalizeProgress({
+          completed: index + 1,
+          total: completed.length,
+          namesSynced,
+          nameFailures,
+          offlineSaved,
+          offlineFailures,
+        });
+        setFinalizeFailures([...failures]);
       }
-      setOfflineProgress({ completed: index + 1, total: completed.length, succeeded, failed });
-      setOfflineFailures([...failures]);
+      notifyLibraryUpdated();
+    } finally {
+      setFinalizeBusy(false);
     }
-    setOfflineBusy(false);
   }
 
   const activeOps = useMemo(() => (proposal ? proposal.operations.filter((o) => !o.excluded) : []), [proposal]);
@@ -332,13 +408,21 @@ export default function OrganizeView({ folderId, onBack, onViewLog }: OrganizeVi
                 </div>
               )}
               <div className="mt-4 rounded-lg border border-gold/20 bg-gold/5 p-3">
-                <p className="text-sm font-semibold text-white">ذخیره نسخه آفلاین فایل‌های سازمان‌دهی‌شده</p>
-                <p className="mt-1 text-xs leading-6 text-text-secondary">اطلاعات فیلم و پوستر، تصویر پس‌زمینه و تصاویر بازیگران در کنار فایل ویدئویی ذخیره می‌شوند. فایل‌های موجود بازنویسی نمی‌شوند.</p>
-                <button onClick={() => void saveOrganizedFilesOffline()} disabled={offlineBusy || execResult.succeeded.length === 0} className="btn-primary mt-3 text-sm disabled:opacity-50">
-                  {offlineBusy ? <><Loader2 size={16} className="animate-spin" /> در حال ذخیره…</> : 'ذخیره فایل‌های موفق به‌صورت آفلاین'}
+                <p className="text-sm font-semibold text-white">تکمیل گروهی فایل‌های موفق</p>
+                <p className="mt-1 text-xs leading-6 text-text-secondary">
+                  با یک مرحله، نام پوشه و فیلم و زیرنویس‌ها هماهنگ می‌شود و اطلاعات، پوستر، پس‌زمینه و تصاویر بازیگران کنار ویدئو ذخیره می‌شوند. فایل‌های جانبی موجود بازنویسی نمی‌شوند.
+                </p>
+                <button onClick={() => void finalizeSuccessfulFiles()} disabled={finalizeBusy || execResult.succeeded.length === 0} className="btn-primary mt-3 text-sm disabled:opacity-50">
+                  {finalizeBusy ? <><Loader2 size={16} className="animate-spin" /> در حال تکمیل گروهی…</> : 'تغییر نام همه + ذخیره اطلاعات آفلاین'}
                 </button>
-                {offlineProgress.total > 0 && <p className="mt-2 text-xs text-text-secondary">پیشرفت: {toPersianDigits(offlineProgress.completed)} از {toPersianDigits(offlineProgress.total)} · {toPersianDigits(offlineProgress.succeeded)} موفق · {toPersianDigits(offlineProgress.failed)} ناموفق</p>}
-                {offlineFailures.length > 0 && <div className="mt-2 max-h-28 space-y-1 overflow-y-auto">{offlineFailures.map((failure, index) => <p key={index} className="text-xs text-amber-300">{failure}</p>)}</div>}
+                {finalizeProgress.total > 0 && (
+                  <div className="mt-2 space-y-1 text-xs text-text-secondary">
+                    <p>پیشرفت: {toPersianDigits(finalizeProgress.completed)} از {toPersianDigits(finalizeProgress.total)}</p>
+                    <p>{toPersianDigits(finalizeProgress.namesSynced)} نام هماهنگ · {toPersianDigits(finalizeProgress.nameFailures)} خطای نام‌گذاری</p>
+                    <p>{toPersianDigits(finalizeProgress.offlineSaved)} ذخیره آفلاین · {toPersianDigits(finalizeProgress.offlineFailures)} خطای ذخیره</p>
+                  </div>
+                )}
+                {finalizeFailures.length > 0 && <div className="mt-2 max-h-32 space-y-1 overflow-y-auto">{finalizeFailures.map((failure, index) => <p key={index} className="text-xs text-amber-300">{failure}</p>)}</div>}
               </div>
               <button
                 onClick={onViewLog}
