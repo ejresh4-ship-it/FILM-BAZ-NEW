@@ -630,61 +630,82 @@ class LibraryService {
         }
       }
 
-      // Move the video file
-      const result = await fs.moveFile(op.sourcePath, op.destFilePath);
-      if (!result.success) {
-        failed.push({ operation: op, error: result.error || 'انتقال ناموفق بود' });
-        this.addLog({
-          id: uid(),
-          timestamp: Date.now(),
-          type: 'move',
-          sourcePath: op.sourcePath,
-          destPath: op.destFilePath,
-          success: false,
-          error: result.error,
-          proposalId: proposal.id,
-        });
-        continue;
-      }
-
-      succeeded.push(op);
-      this.addLog({
-        id: uid(),
-        timestamp: Date.now(),
-        type: 'move',
-        sourcePath: op.sourcePath,
-        destPath: op.destFilePath,
-        success: true,
-        proposalId: proposal.id,
-      });
-
-      // Move and rename related subtitles to match the new video basename.
+      // Treat the video and its sidecar subtitles as one transaction.
+      // Preflight every subtitle before moving anything: a missing source or an
+      // occupied destination must never leave the video separated from its subs.
       const item = this.items.find((i) => i.id === op.itemId);
       const sourceVideoName = fs.baseName(op.sourcePath);
       const sourceVideoBase = sourceVideoName.slice(0, sourceVideoName.lastIndexOf('.'));
       const destinationVideoName = fs.baseName(op.destFilePath);
       const destinationVideoBase = destinationVideoName.slice(0, destinationVideoName.lastIndexOf('.'));
-      for (const sub of op.relatedSubtitles) {
+      const subtitleMoves = op.relatedSubtitles.map((sub) => {
         const sourceSubtitleName = fs.baseName(sub.filePath);
         const sourceSubtitleBase = sourceSubtitleName.slice(0, sourceSubtitleName.lastIndexOf('.'));
         const suffix = sourceSubtitleBase.toLowerCase().startsWith(sourceVideoBase.toLowerCase())
           ? sourceSubtitleBase.slice(sourceVideoBase.length)
           : '';
         const subDestName = `${destinationVideoBase}${suffix}.${sub.extension}`;
-        const subDestPath = fs.joinPath(op.destFolderPath, subDestName);
-        if (await fs.exists(subDestPath)) {
-          this.addLog({ id: uid(), timestamp: Date.now(), type: 'move', sourcePath: sub.filePath, destPath: subDestPath, success: false, error: 'زیرنویس مقصد از قبل وجود دارد', proposalId: proposal.id });
-          continue;
+        return { sub, subDestName, subDestPath: fs.joinPath(op.destFolderPath, subDestName) };
+      });
+
+      let subtitlePreflightError: string | undefined;
+      for (const move of subtitleMoves) {
+        if (!(await fs.exists(move.sub.filePath))) {
+          subtitlePreflightError = `زیرنویس مبدأ یافت نشد: ${fs.baseName(move.sub.filePath)}`;
+          break;
         }
-        const subResult = await fs.moveFile(sub.filePath, subDestPath);
-        this.addLog({ id: uid(), timestamp: Date.now(), type: 'move', sourcePath: sub.filePath, destPath: subDestPath, success: subResult.success, error: subResult.error, proposalId: proposal.id });
-        if (subResult.success && item) {
-          const tracked = item.subtitles.find((entry) => entry.filePath === sub.filePath);
-          if (tracked) { tracked.filePath = subDestPath; tracked.fileName = subDestName; }
+        if (await fs.exists(move.subDestPath)) {
+          subtitlePreflightError = `فایل زیرنویس مقصد از قبل وجود دارد: ${move.subDestName}`;
+          break;
         }
       }
+      if (subtitlePreflightError) {
+        failed.push({ operation: op, error: subtitlePreflightError });
+        this.addLog({ id: uid(), timestamp: Date.now(), type: 'move', sourcePath: op.sourcePath, destPath: op.destFilePath, success: false, error: subtitlePreflightError, proposalId: proposal.id });
+        continue;
+      }
 
-      // Update the in-memory item to reflect the new path
+      const movedSubtitles: Array<{ sourcePath: string; destPath: string; subDestName: string }> = [];
+      let subtitleMoveError: string | undefined;
+      for (const move of subtitleMoves) {
+        const subResult = await fs.moveFile(move.sub.filePath, move.subDestPath);
+        if (!subResult.success) {
+          subtitleMoveError = subResult.error || `انتقال زیرنویس ناموفق بود: ${move.subDestName}`;
+          break;
+        }
+        movedSubtitles.push({ sourcePath: move.sub.filePath, destPath: move.subDestPath, subDestName: move.subDestName });
+      }
+
+      if (subtitleMoveError) {
+        for (const moved of movedSubtitles.reverse()) {
+          await fs.moveFile(moved.destPath, moved.sourcePath);
+        }
+        failed.push({ operation: op, error: subtitleMoveError });
+        this.addLog({ id: uid(), timestamp: Date.now(), type: 'move', sourcePath: op.sourcePath, destPath: op.destFilePath, success: false, error: subtitleMoveError, proposalId: proposal.id });
+        continue;
+      }
+
+      // Move the video only after all subtitles have moved successfully.
+      const result = await fs.moveFile(op.sourcePath, op.destFilePath);
+      if (!result.success) {
+        for (const moved of movedSubtitles.reverse()) {
+          await fs.moveFile(moved.destPath, moved.sourcePath);
+        }
+        failed.push({ operation: op, error: result.error || 'انتقال ناموفق بود' });
+        this.addLog({ id: uid(), timestamp: Date.now(), type: 'move', sourcePath: op.sourcePath, destPath: op.destFilePath, success: false, error: result.error, proposalId: proposal.id });
+        continue;
+      }
+
+      succeeded.push(op);
+      this.addLog({ id: uid(), timestamp: Date.now(), type: 'move', sourcePath: op.sourcePath, destPath: op.destFilePath, success: true, proposalId: proposal.id });
+      for (const moved of movedSubtitles) {
+        this.addLog({ id: uid(), timestamp: Date.now(), type: 'move', sourcePath: moved.sourcePath, destPath: moved.destPath, success: true, proposalId: proposal.id });
+        const tracked = item?.subtitles.find((entry) => entry.filePath === moved.sourcePath);
+        if (tracked) { tracked.filePath = moved.destPath; tracked.fileName = moved.subDestName; }
+      }
+
+      // Update the in-memory item to reflect the new path only after the whole
+      // video/subtitle group has completed successfully.
       if (item) {
         item.filePath = op.destFilePath;
         item.fileName = destinationVideoName;
