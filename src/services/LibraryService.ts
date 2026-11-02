@@ -343,12 +343,10 @@ class LibraryService {
 
     const fs = getFilesystemService();
     const metadata = getMetadataService().getMetadataForItem(item.id);
-    const canonicalTitle = metadata?.title?.trim() || item.titleGuess || stripExtension(item.fileName);
+    const canonicalTitle = metadata?.persianTitle?.trim() || metadata?.title?.trim() || item.titleGuess || stripExtension(item.fileName);
     const canonicalYear = metadata?.year || item.yearGuess;
     const folderName = buildFolderName(canonicalTitle, canonicalYear);
-    const extension = item.extension || stripExtension(item.fileName) === item.fileName
-      ? item.extension || ''
-      : item.fileName.split('.').pop() || '';
+    const extension = item.extension || (item.fileName.includes('.') ? item.fileName.slice(item.fileName.lastIndexOf('.') + 1) : '');
     const fileBase = item.mediaType === 'episode' && item.seasonGuess && item.episodeGuess
       ? `${canonicalTitle} - S${String(item.seasonGuess).padStart(2, '0')}E${String(item.episodeGuess).padStart(2, '0')}`
       : folderName;
@@ -1009,6 +1007,11 @@ class LibraryService {
 
 function normalizePath(path: string): string {
   return path.replace(/\\/g, '/').replace(/\/+$/, '').toLocaleLowerCase();
+}
+
+function stripExtension(fileName: string): string {
+  const dot = fileName.lastIndexOf('.');
+  return dot > 0 ? fileName.slice(0, dot) : fileName;
 }
 
 function validateRenameName(value: string | undefined, extension: string, label: string): string {
