@@ -161,67 +161,127 @@ class LibraryService {
     const destinationFolder = renameFolder
       ? fs.joinPath(fs.parentPath(sourceFolderPath), folderName)
       : sourceFolderPath;
+    const folderWillMove = renameFolder && destinationFolder !== sourceFolderPath;
     const destinationFile = fs.joinPath(destinationFolder, fileName);
+    const videoPathAfterFolderMove = folderWillMove
+      ? fs.joinPath(destinationFolder, item.fileName)
+      : sourceItemPath;
 
-    if (renameFolder && destinationFolder !== sourceFolderPath && await fs.exists(destinationFolder)) {
+    if (folderWillMove && await fs.exists(destinationFolder)) {
       throw new Error('پوشه مقصد از قبل وجود دارد');
-    }
-    if (renameFile && destinationFile !== sourceItemPath && await fs.exists(destinationFile)) {
-      throw new Error('فایل مقصد از قبل وجود دارد');
     }
     if (!await fs.exists(sourceItemPath)) throw new Error('فایل اصلی یافت نشد');
     if (renameFolder && !await fs.exists(sourceFolderPath)) throw new Error('پوشه اصلی یافت نشد');
+    if (renameFile && destinationFile !== videoPathAfterFolderMove && await fs.exists(destinationFile)) {
+      throw new Error('فایل مقصد از قبل وجود دارد');
+    }
 
-    if (renameFolder && destinationFolder !== sourceFolderPath) {
+    const removeExtension = (name: string) => {
+      const dot = name.lastIndexOf('.');
+      return dot > 0 ? name.slice(0, dot) : name;
+    };
+    const oldVideoBase = removeExtension(item.fileName);
+    const newVideoBase = removeExtension(fileName);
+    const oldFolderPrefix = sourceFolderPath.endsWith('\\') ? sourceFolderPath : sourceFolderPath + '\\';
+    const rebaseFolderPath = (path: string) => {
+      if (path === sourceFolderPath) return destinationFolder;
+      if (path.startsWith(oldFolderPrefix)) {
+        return destinationFolder + path.slice(sourceFolderPath.length);
+      }
+      return path;
+    };
+
+    // Preflight every subtitle before changing the folder or video. A subtitle
+    // conflict or missing source must not leave a partially renamed group.
+    const subtitlePlans = renameFile ? item.subtitles.map((subtitle) => {
+      const oldSubtitleBase = removeExtension(subtitle.fileName);
+      const suffix = oldSubtitleBase.toLowerCase().startsWith(oldVideoBase.toLowerCase())
+        ? oldSubtitleBase.slice(oldVideoBase.length)
+        : (oldSubtitleBase ? '.' + oldSubtitleBase : '');
+      const subtitleExtension = subtitle.extension || subtitle.fileName.split('.').pop() || 'srt';
+      const nextName = newVideoBase + suffix + '.' + subtitleExtension;
+      const sourceAfterFolderMove = folderWillMove ? rebaseFolderPath(subtitle.filePath) : subtitle.filePath;
+      return {
+        originalPath: subtitle.filePath,
+        sourcePath: sourceAfterFolderMove,
+        destinationPath: fs.joinPath(destinationFolder, nextName),
+        destinationName: nextName,
+      };
+    }) : [];
+
+    for (const plan of subtitlePlans) {
+      if (!await fs.exists(plan.originalPath)) {
+        throw new Error('زیرنویس مبدأ یافت نشد: ' + fs.baseName(plan.originalPath));
+      }
+      if (plan.destinationPath !== plan.sourcePath && await fs.exists(plan.destinationPath)) {
+        throw new Error('فایل زیرنویس مقصد از قبل وجود دارد: ' + plan.destinationName);
+      }
+    }
+
+    let folderMoved = false;
+    const movedSubtitles: Array<{ sourcePath: string; destinationPath: string }> = [];
+    const rollback = async () => {
+      const rollbackErrors: string[] = [];
+      for (const moved of [...movedSubtitles].reverse()) {
+        const result = await fs.moveFile(moved.destinationPath, moved.sourcePath);
+        if (!result.success) rollbackErrors.push(fs.baseName(moved.destinationPath));
+      }
+      if (folderMoved) {
+        const result = await fs.moveFile(destinationFolder, sourceFolderPath);
+        if (!result.success) rollbackErrors.push(fs.baseName(destinationFolder));
+      }
+      return rollbackErrors;
+    };
+
+    if (folderWillMove) {
       const result = await fs.moveFile(sourceFolderPath, destinationFolder);
       if (!result.success) throw new Error(result.error || 'تغییر نام پوشه ناموفق بود');
+      folderMoved = true;
     }
-    if (renameFile && destinationFile !== sourceItemPath) {
-      const currentFilePath = renameFolder
-        ? fs.joinPath(destinationFolder, item.fileName)
-        : sourceItemPath;
-      const result = await fs.moveFile(currentFilePath, destinationFile);
+
+    // Rename subtitles first, then the video. If any step fails, restore all
+    // already moved subtitles and the original folder name.
+    for (const plan of subtitlePlans) {
+      if (plan.destinationPath === plan.sourcePath) continue;
+      const result = await fs.moveFile(plan.sourcePath, plan.destinationPath);
       if (!result.success) {
-        if (renameFolder) await fs.moveFile(destinationFolder, sourceFolderPath);
-        throw new Error(result.error || 'تغییر نام فایل ناموفق بود');
+        const rollbackErrors = await rollback();
+        const suffix = rollbackErrors.length ? '؛ بازگردانی کامل انجام نشد: ' + rollbackErrors.join('، ') : '';
+        throw new Error((result.error || 'تغییر نام زیرنویس ناموفق بود') + suffix);
+      }
+      movedSubtitles.push({ sourcePath: plan.sourcePath, destinationPath: plan.destinationPath });
+    }
+
+    if (renameFile && destinationFile !== videoPathAfterFolderMove) {
+      const result = await fs.moveFile(videoPathAfterFolderMove, destinationFile);
+      if (!result.success) {
+        const rollbackErrors = await rollback();
+        const suffix = rollbackErrors.length ? '؛ بازگردانی کامل انجام نشد: ' + rollbackErrors.join('، ') : '';
+        throw new Error((result.error || 'تغییر نام فایل ناموفق بود') + suffix);
       }
     }
 
-    // Keep sidecar subtitles paired with the video when its filename changes.
     const renamedSubtitlePaths = new Map<string, string>();
-    if (renameFile && item.subtitles.length > 0) {
-      const oldVideoBase = item.fileName.slice(0, item.fileName.lastIndexOf('.'));
-      const newVideoBase = fileName.slice(0, fileName.lastIndexOf('.'));
-      for (const subtitle of item.subtitles) {
-        const oldSubtitleBase = subtitle.fileName.slice(0, subtitle.fileName.lastIndexOf('.'));
-        const suffix = oldSubtitleBase.toLowerCase().startsWith(oldVideoBase.toLowerCase())
-          ? oldSubtitleBase.slice(oldVideoBase.length)
-          : '';
-        const subtitleName = `${newVideoBase}${suffix}.${subtitle.extension}`;
-        const movedSource = renameFolder ? subtitle.filePath.replace(sourceFolderPath, destinationFolder) : subtitle.filePath;
-        const subtitleDestination = fs.joinPath(destinationFolder, subtitleName);
-        if (subtitleDestination === movedSource || await fs.exists(subtitleDestination)) continue;
-        const subtitleMove = await fs.moveFile(movedSource, subtitleDestination);
-        if (subtitleMove.success) renamedSubtitlePaths.set(subtitle.filePath, subtitleDestination);
-      }
-    }
+    for (const plan of subtitlePlans) renamedSubtitlePaths.set(plan.originalPath, plan.destinationPath);
 
-    const oldFolderPrefix = sourceFolderPath.endsWith('\\') ? sourceFolderPath : `${sourceFolderPath}\\`;
     for (const current of this.items) {
-      if (renameFolder && (current.parentFolder === sourceFolderPath || current.filePath.startsWith(oldFolderPrefix))) {
+      const isInsideRenamedFolder = folderWillMove &&
+        (current.parentFolder === sourceFolderPath || current.filePath.startsWith(oldFolderPrefix));
+      if (isInsideRenamedFolder) {
         current.parentFolder = destinationFolder;
         current.filePath = current.filePath === sourceItemPath
           ? destinationFile
-          : current.filePath.replace(sourceFolderPath, destinationFolder);
+          : rebaseFolderPath(current.filePath);
         current.subtitles = current.subtitles.map((subtitle) => {
           const movedPath = renamedSubtitlePaths.get(subtitle.filePath);
-          const nextPath = movedPath || subtitle.filePath.replace(sourceFolderPath, destinationFolder);
+          const nextPath = movedPath || rebaseFolderPath(subtitle.filePath);
           return { ...subtitle, filePath: nextPath, fileName: fs.baseName(nextPath) };
         });
-        if (current.id === itemId && renameFile) current.fileName = fileName;
-      } else if (current.id === itemId && renameFile) {
-        current.filePath = destinationFile;
-        current.fileName = fileName;
+      } else if (current.id === itemId) {
+        if (renameFile) {
+          current.filePath = destinationFile;
+          current.fileName = fileName;
+        }
         current.subtitles = current.subtitles.map((subtitle) => {
           const nextPath = renamedSubtitlePaths.get(subtitle.filePath) || subtitle.filePath;
           return { ...subtitle, filePath: nextPath, fileName: fs.baseName(nextPath) };
