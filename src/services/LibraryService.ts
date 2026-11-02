@@ -707,16 +707,17 @@ class LibraryService {
       );
       // If the file lives in a dedicated folder (folder name matches title), skip.
       const parentBaseName = fs.baseName(item.parentFolder).toLowerCase();
-      const titleGuess = (item.titleGuess || '').toLowerCase();
+      const metadata = getMetadataService().getMetadataForItem(item.id);
+      const knownTitles = [metadata?.persianTitle, metadata?.title, item.titleGuess]
+        .map((value) => value?.trim().toLowerCase() || '')
+        .filter(Boolean);
       const isDedicated =
         siblingsInSameFolder.length === 0 &&
-        titleGuess &&
-        (parentBaseName.includes(titleGuess) || titleGuess.includes(parentBaseName));
+        knownTitles.some((title) => parentBaseName.includes(title) || title.includes(parentBaseName));
 
       if (isDedicated) continue;
 
       // Prefer confirmed provider metadata; fall back to the conservative filename parser.
-      const metadata = getMetadataService().getMetadataForItem(item.id);
       const canonicalTitle = metadata?.persianTitle?.trim() || metadata?.title?.trim() || item.titleGuess || item.fileName;
       const canonicalYear = metadata?.year || item.yearGuess;
       const folderName = buildFolderName(canonicalTitle, canonicalYear);
