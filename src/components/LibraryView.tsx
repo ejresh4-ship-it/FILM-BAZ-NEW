@@ -609,7 +609,15 @@ export default function LibraryView({ onBack, onOrganize, onViewLog, onReviewMet
                             </button>
                           )}
                           <button
-                            onClick={() => handleRemoveItem(item)}
+                            onClick={() => setLookupItem(item)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-sky-500/20 bg-sky-500/5 px-2 py-1 text-xs text-sky-300 transition-colors hover:border-sky-500/50 hover:bg-sky-500/10"
+                            title="جستجو و انتخاب منبع مرجع جدید برای این فیلم"
+                          >
+                            <Globe size={13} />
+                            تغییر منبع
+                          </button>
+                          <button
+                            onClick={() => handleRemoveItem(item)
                             className="inline-flex items-center gap-1 rounded-lg border border-red-500/20 bg-red-500/5 px-2 py-1 text-xs text-red-300 transition-colors hover:border-red-500/50 hover:bg-red-500/10"
                             title="حذف از فهرست کتابخانه؛ فایل روی هارد پاک نمی‌شود"
                           >
