@@ -63,7 +63,7 @@ export default function Hero({ featured, onOpenDetails, onQuickView }: HeroProps
       {/* Content */}
       <div className="relative flex h-full items-end">
         <div className="mx-auto w-full max-w-[1400px] px-4 pb-16 lg:px-8 lg:pb-20">
-          <div className="max-w-2xl">
+          <div className="hero-contrast-text max-w-2xl">
             {current.genres.length > 0 && (
               <div className="mb-3 flex flex-wrap items-center gap-2">
                 <span className="rounded-full border border-gold/30 bg-gold/10 px-3 py-1 text-xs font-medium text-gold-bright">
@@ -81,14 +81,14 @@ export default function Hero({ featured, onOpenDetails, onQuickView }: HeroProps
               </div>
             )}
 
-            <h1 className="text-3xl font-extrabold leading-tight text-white drop-shadow-lg sm:text-4xl lg:text-5xl">
+            <h1 className="text-3xl font-extrabold leading-tight text-white sm:text-4xl lg:text-5xl">
               {current.title}
             </h1>
-            <p className="mt-1 text-base font-medium text-gold-bright/80 lg:text-lg">
+            <p className="mt-1 text-base font-medium text-white lg:text-lg">
               {current.englishTitle}
             </p>
 
-            <p className="mt-4 max-w-xl text-sm leading-relaxed text-text-secondary sm:text-base line-clamp-3">
+            <p className="mt-4 max-w-xl text-sm leading-relaxed text-white sm:text-base line-clamp-3">
               {current.synopsis}
             </p>
 
