@@ -18,7 +18,13 @@ export default function Hero({ featured, onOpenDetails, onQuickView }: HeroProps
   useEffect(() => {
     setBackdropError(false);
     setPosterError(false);
-  }, [index]);
+  }, [index, featured]);
+
+  useEffect(() => {
+    if (featured.length < 2) return;
+    const timer = window.setInterval(() => setIndex((currentIndex) => (currentIndex + 1) % featured.length), 8000);
+    return () => window.clearInterval(timer);
+  }, [featured.length]);
 
   if (featured.length === 0) return null;
 
@@ -38,6 +44,8 @@ export default function Hero({ featured, onOpenDetails, onQuickView }: HeroProps
       <div className="absolute inset-0">
         {showBackdrop ? (
           <img
+            key={`${current.id}-backdrop`}
+            key={`${current.id}-backdrop`}
             src={current.backdropUrl}
             alt={`تصویر پس‌زمینه ${current.title}`}
             className="h-full w-full object-cover"
@@ -45,6 +53,8 @@ export default function Hero({ featured, onOpenDetails, onQuickView }: HeroProps
           />
         ) : showPosterFallback ? (
           <img
+            key={`${current.id}-poster`}
+            key={`${current.id}-poster`}
             src={current.posterUrl}
             alt={`تصویر پس‌زمینه ${current.title}`}
             className="h-full w-full object-cover"
@@ -63,9 +73,9 @@ export default function Hero({ featured, onOpenDetails, onQuickView }: HeroProps
       {/* Content */}
       <div className="relative flex h-full items-end">
         <div className="mx-auto w-full max-w-[1400px] px-4 pb-16 lg:px-8 lg:pb-20">
-          <div className="hero-contrast-text max-w-2xl">
+          <div className="max-w-3xl">
             {current.genres.length > 0 && (
-              <div className="mb-3 flex flex-wrap items-center gap-2">
+              <div className="mb-4 flex flex-wrap items-center gap-2">
                 <span className="rounded-full border border-gold/30 bg-gold/10 px-3 py-1 text-xs font-medium text-gold-bright">
                   {current.genres[0]}
                 </span>
@@ -81,14 +91,14 @@ export default function Hero({ featured, onOpenDetails, onQuickView }: HeroProps
               </div>
             )}
 
-            <h1 className="text-3xl font-extrabold leading-tight text-white sm:text-4xl lg:text-5xl">
+            <h1 className="text-4xl font-black leading-[1.12] text-white drop-shadow-[0_3px_12px_rgba(0,0,0,0.95)] [text-shadow:0_2px_3px_rgba(0,0,0,0.95),0_0_18px_rgba(0,0,0,0.65)] mix-blend-difference sm:text-5xl lg:text-6xl xl:text-7xl">
               {current.title}
             </h1>
-            <p className="mt-1 text-base font-medium text-white lg:text-lg">
+            <p className="mt-2 text-lg font-extrabold text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)] [text-shadow:0_2px_4px_rgba(0,0,0,0.95)] mix-blend-difference sm:text-xl lg:text-2xl">
               {current.englishTitle}
             </p>
 
-            <p className="mt-4 max-w-xl text-sm leading-relaxed text-white sm:text-base line-clamp-3">
+            <p className="mt-5 max-w-xl rounded-lg bg-black/25 px-3 py-2 text-sm font-semibold leading-7 text-white drop-shadow-lg backdrop-blur-[2px] [text-shadow:0_1px_4px_rgba(0,0,0,0.95)] sm:text-base line-clamp-3">
               {current.synopsis}
             </p>
 
