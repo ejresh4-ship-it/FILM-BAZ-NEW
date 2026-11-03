@@ -10,7 +10,7 @@ interface MovieDetailsProps {
 
 export default function MovieDetails({ movie, onBack, onPlay }: MovieDetailsProps) {
   return (
-    <div className="fade-in">
+    <div className="fade-in font-movie-details">
       {/* Backdrop hero */}
       <div className="relative h-[42vh] min-h-[280px] w-full overflow-hidden">
         {movie.backdropUrl || movie.posterUrl ? <img
