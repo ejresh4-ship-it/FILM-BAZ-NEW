@@ -73,8 +73,20 @@ const sections = [
 
 type SectionId = (typeof sections)[number]['id'];
 
+interface FontSettings { homeHeading: number; quickView: number; details: number; }
+const DEFAULT_FONT_SETTINGS: FontSettings = { homeHeading: 26, quickView: 16, details: 16 };
+const FONT_SETTINGS_KEY = 'film-baz:font-settings';
+function readFontSettings(): FontSettings {
+  try {
+    const saved = localStorage.getItem(FONT_SETTINGS_KEY);
+    return saved ? { ...DEFAULT_FONT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_FONT_SETTINGS;
+  } catch { return DEFAULT_FONT_SETTINGS; }
+}
+
 export default function SettingsView({ onBack, onNavigateLibrary }: SettingsViewProps) {
   const [activeSection, setActiveSection] = useState<SectionId>('appearance');
+  const [fontSettings, setFontSettings] = useState<FontSettings>(readFontSettings);
+  const updateFontSetting = (key: keyof FontSettings, value: number) => setFontSettings((current) => ({ ...current, [key]: value }));
   const [theme, setTheme] = useState<'dark' | 'gold'>(() => {
     const saved = localStorage.getItem('film-baz:theme');
     return saved === 'gold' ? 'gold' : 'dark';
@@ -146,9 +158,14 @@ export default function SettingsView({ onBack, onNavigateLibrary }: SettingsView
                   </div>
                 </div>
                 <div className="mt-5 border-t border-white/5 pt-4">
-                  <p className="text-sm text-text-secondary">
-                    سایر تنظیمات ظاهر مانند اندازه فونت و فشرده‌سازی نمایش در فاز بعدی اضافه می‌شود.
-                  </p>
+                  <h3 className="mb-4 text-sm font-semibold text-white">تنظیم اندازه فونت</h3>
+                  <div className="space-y-5">
+                    <FontSizeControl label="عنوان‌های صفحه نخست" value={fontSettings.homeHeading} min={18} max={36} onChange={(value) => updateFontSetting('homeHeading', value)} />
+                    <FontSizeControl label="متن پنجره اطلاعات فیلم" value={fontSettings.quickView} min={12} max={22} onChange={(value) => updateFontSetting('quickView', value)} />
+                    <FontSizeControl label="متن صفحه جزئیات فیلم" value={fontSettings.details} min={12} max={22} onChange={(value) => updateFontSetting('details', value)} />
+                  </div>
+                  <button type="button" onClick={() => setFontSettings(DEFAULT_FONT_SETTINGS)} className="btn-ghost mt-5 text-sm">بازنشانی اندازه فونت</button>
+                  <p className="mt-3 text-xs text-text-muted">هر بخش جداگانه تنظیم می‌شود و انتخاب‌ها پس از بستن برنامه هم باقی می‌مانند.</p>
                 </div>
               </SettingsPanel>
             )}
@@ -234,6 +251,21 @@ function SettingsPanel({
       <p className="mt-1 text-sm text-text-muted">{desc}</p>
       <div className="mt-5">{children}</div>
     </div>
+  );
+}
+
+function FontSizeControl({ label, value, min, max, onChange }: {
+  label: string; value: number; min: number; max: number; onChange: (value: number) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-2 flex items-center justify-between gap-3 text-sm text-text-secondary">
+        <span>{label}</span><span className="font-semibold tabular-nums text-gold-bright">{value}</span>
+      </span>
+      <input type="range" min={min} max={max} step={1} value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+        className="w-full cursor-pointer accent-amber-400" />
+    </label>
   );
 }
 
