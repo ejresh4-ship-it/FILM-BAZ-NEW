@@ -145,7 +145,3 @@
 .font-movie-details h2 { font-size: calc(var(--font-details, 16px) * 1.2) !important; }
 .font-movie-details p,
 .font-movie-details span { font-size: var(--font-details, 16px) !important; }
-
-/* Invert hero lettering against each slide's actual pixels for readable contrast. */
-.hero-contrast-text { color: #fff; mix-blend-mode: difference; text-shadow: none; }
-.hero-contrast-text > * { color: inherit !important; }
