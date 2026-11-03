@@ -392,7 +392,7 @@ export default function LibraryView({ onBack, onOrganize, onViewLog, onReviewMet
                           className="inline-flex items-center gap-1.5 rounded-lg border border-gold/30 bg-gold/10 px-3 py-2 text-xs font-semibold text-gold-bright transition-colors hover:bg-gold/20"
                         >
                           <Sparkles size={14} />
-                          سازماندهی
+                          سازماندهی کل پوشه
                         </button>
                       )}
                       <button
