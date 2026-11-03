@@ -133,3 +133,15 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #2a3a5a;
 }
+
+
+/* Independent typography controls, persisted by SettingsView. */
+.font-home-headings h1,
+.font-home-headings h2 { font-size: var(--font-home-heading, 26px) !important; }
+.font-quick-view h2 { font-size: calc(var(--font-quick-view, 16px) * 1.35) !important; }
+.font-quick-view p,
+.font-quick-view span { font-size: var(--font-quick-view, 16px) !important; }
+.font-movie-details h1 { font-size: calc(var(--font-details, 16px) * 1.8) !important; }
+.font-movie-details h2 { font-size: calc(var(--font-details, 16px) * 1.2) !important; }
+.font-movie-details p,
+.font-movie-details span { font-size: var(--font-details, 16px) !important; }
