@@ -4,7 +4,8 @@ import { fileURLToPath, URL } from 'node:url';
 
 // https://vitejs.dev/config/
 export default defineConfig({
-    base: './',
+  // GitHub Pages serves this project from /FILM-BAZ-NEW/; desktop builds keep relative asset paths.
+  base: process.env.GITHUB_PAGES === 'true' ? '/FILM-BAZ-NEW/' : './',
   plugins: [react()],
   clearScreen: false,
   server: {
