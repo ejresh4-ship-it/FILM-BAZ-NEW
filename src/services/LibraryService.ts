@@ -312,7 +312,11 @@ class LibraryService {
       (e) => e.isFile && isSubtitleFile(e.name, this.prefs.subtitleExtensions),
     );
 
-    // Build MediaItems
+    // Build MediaItems. Reuse IDs for paths already known so cached metadata,
+    // manual corrections, and library references survive an incremental rescan.
+    const existingByPath = new Map(
+      this.getItemsForFolder(folderId).map((item) => [item.filePath.toLowerCase(), item]),
+    );
     const newItems: MediaItem[] = [];
     const subtitlesByParent: Record<string, DirEntry[]> = {};
     for (const sub of subtitleEntries) {
@@ -336,8 +340,9 @@ class LibraryService {
           language: parseSubtitleLanguage(s.name),
         }));
 
+      const existing = existingByPath.get(vEntry.path.toLowerCase());
       newItems.push({
-        id: uid(),
+        id: existing?.id ?? uid(),
         folderId,
         filePath: vEntry.path,
         fileName: vEntry.name,
@@ -436,12 +441,11 @@ class LibraryService {
     const operations: OrgOperation[] = [];
 
     for (const item of items) {
-      // Skip episodes inside a series season folder (already organized in their series)
-      if (item.mediaType === 'episode' || item.mediaType === 'series') {
-        // For series, check if the file is loose (parent is the library root)
-        const relDepth = this.relativeDepth(folder.path, item.parentFolder);
-        if (relDepth > 0) continue; // already nested
-      }
+      // Only organize files directly inside the selected library folder.
+      // Files already moved into title/season subfolders are considered organized
+      // and must never be proposed for moving again during a later bulk run.
+      const relDepth = this.relativeDepth(folder.path, item.parentFolder);
+      if (relDepth > 0) continue;
 
       // Determine if the file is "loose" — its parent is the library root
       // or the same folder as many other files.
