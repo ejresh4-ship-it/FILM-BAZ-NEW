@@ -73,18 +73,9 @@ const sections = [
 
 type SectionId = (typeof sections)[number]['id'];
 
-type FontFamily = 'Vazirmatn' | 'Noto Sans Arabic' | 'Lalezar' | 'Markazi Text' | 'system';
 interface FontSettings { homeHeading: number; quickView: number; details: number; }
 const DEFAULT_FONT_SETTINGS: FontSettings = { homeHeading: 26, quickView: 16, details: 16 };
 const FONT_SETTINGS_KEY = 'film-baz:font-settings';
-const FONT_FAMILY_KEY = 'film-baz:font-family';
-const FONT_FAMILIES: { value: FontFamily; label: string }[] = [
-  { value: 'Vazirmatn', label: 'وزیرمتن (پیشنهادی)' },
-  { value: 'Noto Sans Arabic', label: 'نوتو سنس عربی' },
-  { value: 'Lalezar', label: 'لاله‌زار' },
-  { value: 'Markazi Text', label: 'مرکزی' },
-  { value: 'system', label: 'فونت پیش‌فرض ویندوز' },
-];
 function readFontSettings(): FontSettings {
   try {
     const saved = localStorage.getItem(FONT_SETTINGS_KEY);
@@ -95,7 +86,6 @@ function readFontSettings(): FontSettings {
 export default function SettingsView({ onBack, onNavigateLibrary }: SettingsViewProps) {
   const [activeSection, setActiveSection] = useState<SectionId>('appearance');
   const [fontSettings, setFontSettings] = useState<FontSettings>(readFontSettings);
-  const [fontFamily, setFontFamily] = useState<FontFamily>(() => (localStorage.getItem(FONT_FAMILY_KEY) as FontFamily) || 'Vazirmatn');
   const updateFontSetting = (key: keyof FontSettings, value: number) => setFontSettings((current) => ({ ...current, [key]: value }));
   const [theme, setTheme] = useState<'dark' | 'gold'>(() => {
     const saved = localStorage.getItem('film-baz:theme');
