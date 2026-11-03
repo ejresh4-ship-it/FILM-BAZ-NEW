@@ -49,7 +49,7 @@ export default function QuickViewModal({ movie, onClose, onPlay, onOpenDetails }
     >
       <div
         ref={dialogRef}
-        className="relative my-8 w-full max-w-3xl overflow-hidden rounded-2xl border border-white/10 bg-surface shadow-cinematic scale-in"
+        className="relative my-8 w-full max-w-3xl overflow-hidden rounded-2xl border border-white/10 bg-surface shadow-cinematic scale-in font-quick-view"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close button */}
