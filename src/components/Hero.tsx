@@ -45,7 +45,6 @@ export default function Hero({ featured, onOpenDetails, onQuickView }: HeroProps
         {showBackdrop ? (
           <img
             key={`${current.id}-backdrop`}
-            key={`${current.id}-backdrop`}
             src={current.backdropUrl}
             alt={`تصویر پس‌زمینه ${current.title}`}
             className="h-full w-full object-cover"
@@ -53,7 +52,6 @@ export default function Hero({ featured, onOpenDetails, onQuickView }: HeroProps
           />
         ) : showPosterFallback ? (
           <img
-            key={`${current.id}-poster`}
             key={`${current.id}-poster`}
             src={current.posterUrl}
             alt={`تصویر پس‌زمینه ${current.title}`}
