@@ -48,7 +48,7 @@
     margin: 0;
     background-color: var(--bg-base);
     color: var(--text-primary);
-    font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+    font-family: var(--app-font-family, 'Vazirmatn'), system-ui, -apple-system, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     line-height: 1.6;
