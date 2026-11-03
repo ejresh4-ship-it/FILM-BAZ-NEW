@@ -18,7 +18,6 @@ import {
   Globe,
   Check,
   Edit3,
-  MoreVertical,
 } from 'lucide-react';
 import type { LibraryFolder, MediaItem, ScanProgress, ScanSummary } from '@/types/media-library';
 import type { MovieMetadata } from '@/types/metadata';
