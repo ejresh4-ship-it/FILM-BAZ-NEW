@@ -118,7 +118,7 @@ export default function MovieDetails({ movie, onBack, onPlay }: MovieDetailsProp
         {/* Synopsis */}
         <div className="mt-8">
           <h2 className="text-lg font-bold text-white">خلاصه داستان</h2>
-          <p className="mt-2 max-w-3xl text-sm leading-7 text-text-secondary sm:text-base">
+          <p className="mt-2 max-w-3xl text-sm leading-7 text-white sm:text-base">
             {movie.synopsis}
           </p>
         </div>
