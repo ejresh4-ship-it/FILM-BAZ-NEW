@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Search, Settings, Download, X } from 'lucide-react';
+import { Search, Settings, Download, Wrench, X } from 'lucide-react';
 import Logo from './Logo';
 import type { Movie } from '@/types/movie';
 
@@ -194,11 +194,19 @@ export default function Header({ activeView, onNavigate, onOpenMovie, movies }: 
         </button>
         <button
           onClick={() => onNavigate('settings')}
+          className="flex h-9 w-9 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-white/5 hover:text-white"
+          aria-label="تنظیمات فونت"
+          title="تنظیمات فونت"
+        >
+          <Wrench size={20} />
+        </button>
+        <button
+          onClick={() => onNavigate('settings')}
           className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${
             activeView === 'settings' ? 'bg-white/10 text-gold-bright' : 'text-text-secondary hover:bg-white/5 hover:text-white'
           }`}
-          aria-label="تنظیمات"
-          title="تنظیمات"
+          aria-label="تنظیمات عمومی"
+          title="تنظیمات عمومی"
         >
           <Settings size={20} />
         </button>
