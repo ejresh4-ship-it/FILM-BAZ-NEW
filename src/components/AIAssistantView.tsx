@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Bot, Send, Sparkles, Film, Search, Languages, WandSparkles, Loader2, User } from 'lucide-react';
 import { getAIService } from '@/services/ai/AIService';
 import type { Movie } from '@/types/movie';
@@ -10,17 +10,38 @@ export default function AIAssistantView({ movies }: { movies: Movie[] }) {
   const [input, setInput] = useState('');
   const [subtitle, setSubtitle] = useState('');
   const [busy, setBusy] = useState(false);
-  const libraryContext = useMemo(() => movies.slice(0, 100).map((m) => `${m.title} (${m.englishTitle}, ${m.year}) | ژانر: ${m.genres.join('، ')} | خلاصه: ${m.synopsis}`).join('\n'), [movies]);
 
-  async function ask(text: string, systemPrompt?: string) {
+  // Only attach a small title-only library index when the user explicitly asks
+  // about their own library. Never send every movie synopsis with ordinary questions.
+  function getRelevantLibraryContext(prompt: string): string {
+    const asksAboutLibrary = /(کتابخانه|آرشیو|موجود|داخل برنامه|فیلم.?هام|فیلم.?های من|سریال.?هام|مشابه آثار)/i.test(prompt);
+    if (!asksAboutLibrary) return '';
+    const entries = movies.slice(0, 15).map((m) => {
+      const title = String(m.title || '').slice(0, 100);
+      const englishTitle = String(m.englishTitle || '').slice(0, 100);
+      const year = m.year ? String(m.year) : '';
+      return [title, englishTitle, year].filter(Boolean).join(' | ');
+    });
+    return entries.length ? entries.join('\n').slice(0, 2500) : 'کتابخانه هنوز خالی است.';
+  }
+
+  async function ask(text: string, customSystemPrompt?: string) {
     const prompt = text.trim();
     if (!prompt || busy) return;
     setMessages((old) => [...old, { role: 'user', content: prompt }]);
     setInput(''); setBusy(true);
     try {
+      const libraryContext = getRelevantLibraryContext(prompt);
+      const defaultSystemPrompt = [
+        'تو دستیار فارسی‌زبان برنامه FILM BAZ هستی. پاسخ‌ها دقیق، دوستانه و فارسی باشند.',
+        'اگر اطلاعات کافی نداری صادقانه بگو و عنوان یا جزئیات فیلم را جعل نکن.',
+        libraryContext ? `فهرست محدود کتابخانه کاربر (فقط برای پاسخ به سؤال درباره آرشیو):\\n${libraryContext}` : '',
+      ].filter(Boolean).join('\\n');
       const response = await getAIService().chat({
-        systemPrompt: systemPrompt || `تو دستیار فارسی‌زبان برنامه FILM BAZ هستی. پاسخ‌ها دقیق، دوستانه و فارسی باشند. اگر اطلاعات کافی نداری صادقانه بگو. از این کتابخانه برای پیشنهادها استفاده کن و فیلمی را که در فهرست نیست به‌عنوان موجود در کتابخانه معرفی نکن:\n${libraryContext || 'کتابخانه هنوز خالی است.'}`,
-        userPrompt: prompt, maxTokens: 1200, temperature: 0.6,
+        systemPrompt: customSystemPrompt || defaultSystemPrompt,
+        userPrompt: prompt,
+        maxTokens: 512,
+        temperature: 0.4,
       });
       setMessages((old) => [...old, { role: 'assistant', content: response.content || 'پاسخی دریافت نشد.' }]);
     } catch (error) {
@@ -46,8 +67,8 @@ export default function AIAssistantView({ movies }: { movies: Movie[] }) {
     <div className="mt-6 rounded-2xl border border-white/10 bg-surface-2 p-4 sm:p-6">
       <div className="mb-3 flex items-center gap-2 text-white"><Languages size={19} className="text-gold-bright"/><h2 className="font-bold">ترجمهٔ زیرنویس به فارسی</h2></div>
       <p className="mb-3 text-xs text-text-muted">متن زیرنویس را وارد کن. برای متن‌های طولانی، آن را در چند بخش ترجمه کن تا محدودیت درخواست رعایت شود.</p>
-      <textarea value={subtitle} onChange={(e) => setSubtitle(e.target.value)} rows={5} placeholder={'1\n00:00:01,000 --> 00:00:03,000\nHello, welcome back.'} className="w-full rounded-xl border border-white/10 bg-base p-3 text-sm text-white outline-none focus:border-gold/50"/>
-      <button disabled={busy || !subtitle.trim()} onClick={() => void ask(`متن زیرنویس زیر را به فارسی روان ترجمه کن. شماره‌ها و زمان‌بندی SRT را دقیقاً حفظ کن و فقط متن دیالوگ‌ها را ترجمه کن:\n\n${subtitle}`, 'تو مترجم حرفه‌ای زیرنویس هستی. متن را به فارسی طبیعی ترجمه کن. شماره‌گذاری و timestampها را بدون هیچ تغییری حفظ کن و فقط دیالوگ‌ها را ترجمه کن. خروجی را فقط به شکل زیرنویس بده.')} className="btn-primary mt-3 inline-flex items-center gap-2 disabled:opacity-50"><WandSparkles size={16}/> ترجمهٔ زیرنویس</button>
+      <textarea value={subtitle} onChange={(e) => setSubtitle(e.target.value)} rows={5} placeholder={'1\\n00:00:01,000 --> 00:00:03,000\\nHello, welcome back.'} className="w-full rounded-xl border border-white/10 bg-base p-3 text-sm text-white outline-none focus:border-gold/50"/>
+      <button disabled={busy || !subtitle.trim()} onClick={() => void ask(`متن زیرنویس زیر را به فارسی روان ترجمه کن. شماره‌ها و زمان‌بندی SRT را دقیقاً حفظ کن و فقط متن دیالوگ‌ها را ترجمه کن:\\n\\n${subtitle}`, 'تو مترجم حرفه‌ای زیرنویس هستی. متن را به فارسی طبیعی ترجمه کن. شماره‌گذاری و timestampها را بدون هیچ تغییری حفظ کن و فقط دیالوگ‌ها را ترجمه کن. خروجی را فقط به شکل زیرنویس بده.')} className="btn-primary mt-3 inline-flex items-center gap-2 disabled:opacity-50"><WandSparkles size={16}/> ترجمهٔ زیرنویس</button>
     </div>
   </section>;
 }
