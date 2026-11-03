@@ -18,6 +18,7 @@ import {
   Globe,
   Check,
   Edit3,
+  MoreVertical,
 } from 'lucide-react';
 import type { LibraryFolder, MediaItem, ScanProgress, ScanSummary } from '@/types/media-library';
 import type { MovieMetadata } from '@/types/metadata';
@@ -151,6 +152,19 @@ export default function LibraryView({ onBack, onOrganize, onViewLog, onReviewMet
 
   const handleCancelScan = (folderId: string) => {
     service.cancelScan(folderId);
+  };
+
+  const handleRemoveItem = async (item: MediaItem) => {
+    const label = item.titleGuess || item.fileName;
+    if (!window.confirm(`«${label}» فقط از فهرست کتابخانه حذف شود؟ فایل اصلی و زیرنویس‌ها روی هارد باقی می‌مانند.`)) return;
+    try {
+      await service.removeItem(item.id);
+      await getMetadataService().clearMetadataForItem(item.id);
+      await loadAll();
+      notifyLibraryUpdated();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'حذف مورد از کتابخانه ناموفق بود');
+    }
   };
 
   const handleLookupMatched = (metadata: MovieMetadata) => {
@@ -571,6 +585,7 @@ export default function LibraryView({ onBack, onOrganize, onViewLog, onReviewMet
                       </td>
                       <td className="px-3 py-2.5">
                         <div className="flex items-center gap-1.5">
+                          <div className="flex flex-wrap items-center gap-1.5">
                           {metadataCache[item.id] ? (
                             <>
                               <span className="inline-flex items-center gap-1 rounded bg-green-500/10 px-1.5 py-0.5 text-xs text-green-400">
@@ -594,6 +609,15 @@ export default function LibraryView({ onBack, onOrganize, onViewLog, onReviewMet
                               جستجوی اطلاعات
                             </button>
                           )}
+                          <button
+                            onClick={() => handleRemoveItem(item)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-red-500/20 bg-red-500/5 px-2 py-1 text-xs text-red-300 transition-colors hover:border-red-500/50 hover:bg-red-500/10"
+                            title="حذف از فهرست کتابخانه؛ فایل روی هارد پاک نمی‌شود"
+                          >
+                            <Trash2 size={13} />
+                            حذف از فهرست
+                          </button>
+                          </div>
                         </div>
                       </td>
                     </tr>
