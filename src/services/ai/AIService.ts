@@ -45,9 +45,9 @@ const DEFAULT_PROVIDERS: AIProviderConfig[] = [
     name: 'مدل آفلاین (llama.cpp / Qwen)',
     type: 'llama-cpp',
     enabled: false,
-    localModelPath: '',
-    localPort: 8080,
-    model: 'qwen2.5-7b-instruct',
+    localModelPath: 'E:\\Ai\\qwen2.5-3b-instruct-q2_k.gguf',
+    localPort: 1234,
+    model: 'qwen2.5-3b-instruct-q2_k.gguf',
     priority: 3,
   },
 ];
@@ -69,6 +69,25 @@ class AIService {
       idbGet<AIUsageStats>(AI_USAGE_KEY),
     ]);
     this.configs = configs ?? DEFAULT_PROVIDERS;
+    // Migrate only the previous built-in llama.cpp defaults. Keep user-customized
+    // endpoints, model names, ports, and non-empty paths intact.
+    const local = this.configs.find((provider) => provider.id === 'llama-cpp');
+    if (local) {
+      let changed = false;
+      if (!local.localModelPath?.trim()) {
+        local.localModelPath = 'E:\\Ai\\qwen2.5-3b-instruct-q2_k.gguf';
+        changed = true;
+      }
+      if (!local.localPort || local.localPort === 8080) {
+        local.localPort = 1234;
+        changed = true;
+      }
+      if (!local.model?.trim() || local.model === 'qwen2.5-7b-instruct') {
+        local.model = 'qwen2.5-3b-instruct-q2_k.gguf';
+        changed = true;
+      }
+      if (changed) await idbSet(AI_CONFIG_KEY, this.configs);
+    }
     // Migrate only the known retired built-in Cloudflare model; preserve custom models.
     const cloudflare = this.configs.find((provider) => provider.id === 'cloudflare');
     if (cloudflare && ['@cf/qwen/qwen1.5-14b-chat-awq', '@cf/meta/llama-3.1-8b-instruct', 'llama-3.1-8b-instruct', '@cf/meta/infire-llama-3.1-8b-instruct'].includes(cloudflare.model || '')) {
@@ -131,6 +150,79 @@ class AIService {
     if (c.type === 'openai-compatible') return !!(c.baseUrl && c.apiKey);
     if (c.type === 'llama-cpp') return !!c.localPort;
     return false;
+  }
+
+  /**
+   * Use only the enabled local llama.cpp provider to recover an uncertain filename.
+   * Returns null on any failure so normal scanning and user review remain available.
+   */
+  async identifyFilename(fileName: string): Promise<{
+    mediaType: 'movie' | 'series' | 'episode';
+    title: string;
+    year?: number;
+    season?: number;
+    episode?: number;
+    language?: string;
+  } | null> {
+    await this.load();
+    const config = this.configs.find((provider) => provider.id === 'llama-cpp' && provider.enabled);
+    if (!config || !this.hasCredentials(config)) return null;
+
+    const port = config.localPort || 1234;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20000);
+    this.usage.totalRequests += 1;
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: config.model || 'qwen2.5-3b-instruct-q2_k.gguf',
+          messages: [
+            {
+              role: 'system',
+              content: 'You identify movie and TV episode filenames. Return only one valid JSON object with keys mediaType,title,year,season,episode,language. mediaType must be movie, series, or episode. title must be the clean original title, not a translation or invented title. Use null for unknown numeric values. Do not guess missing years or episode numbers. Ignore release tags, codecs, resolutions, uploader names and website names.',
+            },
+            {
+              role: 'user',
+              content: `Identify this video filename: ${fileName}\nReturn JSON only. Example: {"mediaType":"movie","title":"The Matrix","year":1999,"season":null,"episode":null,"language":null}`,
+            },
+          ],
+          temperature: 0.1,
+          max_tokens: 180,
+        }),
+      });
+      if (!response.ok) throw new Error(`llama.cpp HTTP ${response.status}`);
+      const payload = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+      const raw = payload.choices?.[0]?.message?.content?.trim() || '';
+      const jsonText = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+      const parsed = JSON.parse(jsonText) as Record<string, unknown>;
+      const title = typeof parsed.title === 'string' ? parsed.title.trim() : '';
+      const mediaType = parsed.mediaType;
+      if (!title || title.length > 160 || !['movie', 'series', 'episode'].includes(String(mediaType))) {
+        throw new Error('Invalid filename identification response');
+      }
+      const validNumber = (value: unknown, min: number, max: number): number | undefined =>
+        typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max ? value : undefined;
+      this.usage.successfulRequests += 1;
+      this.usage.lastUsedAt = Date.now();
+      await this.persistUsage();
+      return {
+        mediaType: mediaType as 'movie' | 'series' | 'episode',
+        title,
+        year: validNumber(parsed.year, 1950, 2039),
+        season: validNumber(parsed.season, 1, 99),
+        episode: validNumber(parsed.episode, 1, 999),
+        language: typeof parsed.language === 'string' && parsed.language.length <= 8 ? parsed.language : undefined,
+      };
+    } catch {
+      this.usage.failedRequests += 1;
+      await this.persistUsage();
+      return null;
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   /** Test connection to a provider by sending a minimal completion request. */
