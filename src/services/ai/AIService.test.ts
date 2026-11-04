@@ -29,12 +29,13 @@ describe('AIService', () => {
     expect(svc.getProvider('cloudflare')?.model).toBe('@cf/meta/llama-3.3-70b-instruct-fp8-fast');
   });
 
-  it('default Qwen model is configured for llama.cpp provider', async () => {
+  it('uses the user's Qwen 3B GGUF path and llama.cpp port by default', async () => {
     const svc = getAIService();
     await svc.load();
     const llama = svc.getProvider('llama-cpp');
-    expect(llama).toBeDefined();
-    expect(llama?.model).toContain('qwen');
+    expect(llama?.model).toBe('qwen2.5-3b-instruct-q2_k.gguf');
+    expect(llama?.localModelPath).toBe('E:\\Ai\\qwen2.5-3b-instruct-q2_k.gguf');
+    expect(llama?.localPort).toBe(1234);
   });
 
   it('isConfigured returns false when no providers enabled', async () => {
