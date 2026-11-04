@@ -230,7 +230,7 @@ export default function AISettingsPanel() {
                           {' '}را روی پورت مورد نظر اجرا کنید. مثال:
                           <br />
                           <code className="mt-1 block rounded bg-white/10 px-1.5 py-1 text-[10px] text-gold-bright" dir="ltr">
-                            E:\\Ai\\llama-server.exe -m E:\\Ai\\qwen2.5-3b-instruct-q2_k.gguf -c 2048 -t 2 -ngl 0 --host 127.0.0.1 --port 1234
+                            E:\Ai\llama-server.exe -m E:\Ai\qwen2.5-3b-instruct-q2_k.gguf -c 2048 -t 2 -ngl 0 --host 127.0.0.1 --port 1234
                           </code>
                         </p>
                       </div>
