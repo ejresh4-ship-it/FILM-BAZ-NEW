@@ -17,7 +17,7 @@ export interface AIProviderConfig {
   // OpenAI-compatible (and Cloudflare gateway)
   baseUrl?: string;
   apiKey?: string;
-  // Model name (e.g. "@cf/qwen/qwen1.5-14b-chat-awq", "qwen2.5-7b-instruct")
+  // Model name (e.g. "@cf/qwen/qwen1.5-14b-chat-awq", "qwen2.5-3b-instruct-q2_k.gguf")
   model?: string;
   // llama.cpp local
   localModelPath?: string;
