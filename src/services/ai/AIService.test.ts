@@ -29,7 +29,7 @@ describe('AIService', () => {
     expect(svc.getProvider('cloudflare')?.model).toBe('@cf/meta/llama-3.3-70b-instruct-fp8-fast');
   });
 
-  it('uses the user's Qwen 3B GGUF path and llama.cpp port by default', async () => {
+  it("uses the configured Qwen 3B GGUF path and llama.cpp port by default", async () => {
     const svc = getAIService();
     await svc.load();
     const llama = svc.getProvider('llama-cpp');
