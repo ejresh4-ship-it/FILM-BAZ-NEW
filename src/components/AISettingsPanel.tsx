@@ -230,15 +230,15 @@ export default function AISettingsPanel() {
                           {' '}را روی پورت مورد نظر اجرا کنید. مثال:
                           <br />
                           <code className="mt-1 block rounded bg-white/10 px-1.5 py-1 text-[10px] text-gold-bright" dir="ltr">
-                            llama-server -m qwen2.5-7b-instruct-q4_k_m.gguf --port 8080
+                            E:\\Ai\\llama-server.exe -m E:\\Ai\\qwen2.5-3b-instruct-q2_k.gguf -c 2048 -t 2 -ngl 0 --host 127.0.0.1 --port 1234
                           </code>
                         </p>
                       </div>
                       <Field label="پورت سرور محلی">
                         <input
                           type="number"
-                          value={provider.localPort || 8080}
-                          onChange={(e) => handleUpdate(provider.id, { localPort: parseInt(e.target.value) || 8080 })}
+                          value={provider.localPort || 1234}
+                          onChange={(e) => handleUpdate(provider.id, { localPort: parseInt(e.target.value) || 1234 })}
                           dir="ltr"
                           className="input-field"
                         />
@@ -262,7 +262,7 @@ export default function AISettingsPanel() {
                       type="text"
                       value={provider.model || ''}
                       onChange={(e) => handleUpdate(provider.id, { model: e.target.value })}
-                      placeholder={provider.type === 'cloudflare' ? '@cf/meta/llama-3.3-70b-instruct-fp8-fast' : 'qwen2.5-7b-instruct'}
+                      placeholder={provider.type === 'cloudflare' ? '@cf/meta/llama-3.3-70b-instruct-fp8-fast' : 'qwen2.5-3b-instruct-q2_k.gguf'}
                       dir="ltr"
                       className="input-field"
                     />
